@@ -1,0 +1,65 @@
+name: stack_v1_cobol
+role: train            # train | eval_only
+description: >
+  COBOL subset of The Stack v1 (near-deduplicated). Primary source of real-world
+  COBOL programs for the domain-adaptation corpus.
+
+source:
+  type: huggingface_dataset
+  repo: bigcode/the-stack-dedup
+  url: https://huggingface.co/datasets/bigcode/the-stack-dedup
+  subset: data/cobol            # loaded via data_dir
+  revision: null                # TODO: pin the commit hash at download time
+  gated: true                   # must accept terms on the HF dataset page first
+
+license:
+  declared: "mixed - permissively licensed files; each file keeps its original license"
+  terms_of_use: https://huggingface.co/datasets/bigcode/the-stack-dedup
+  constraints:
+    - "Use must follow each file's original license, including attribution where required."
+    - "Re-download periodically to honor data-removal (opt-out) requests."
+    - "Do not redistribute the data in this repo; share only this manifest."
+  verified: false               # TODO: confirm terms text at download time
+
+download:
+  method: datasets.load_dataset
+  command: |
+    from datasets import load_dataset
+    ds = load_dataset("bigcode/the-stack-dedup", data_dir="data/cobol",
+                      split="train", streaming=False)
+  target_dir: data/raw/stack_v1_cobol/    # scratch only; the output lives in W&B
+  date_downloaded: null         # TODO
+
+integrity:
+  num_files: null               # TODO: record after download
+  size_bytes: null              # TODO
+  sha256_of_export: null        # TODO: hash of the exported parquet/jsonl
+
+outputs:
+  - wandb_artifact: raw-corpus        # source=stack_v1_cobol
+    artifact_type: dataset
+  - wandb_artifact: clean-corpus
+    artifact_type: dataset
+
+pipeline:
+  planned_steps:                # filters follow the COBOL-Coder paper (arXiv:2604.03986)
+    - "drop files < 20 lines or > 50,000 lines"
+    - "drop non-text files and files with a high share of non-alphanumeric characters"
+    - "MinHash + LSH near-duplicate removal (keep one file per cluster)"
+    - "decontaminate against benchmarks (see benchmarks.yaml)"
+    - "tag, don't drop: GnuCOBOL syntax check (-fsyntax-only, -std=ibm, stub copybooks) recorded as a field; EXEC CICS/SQL and missing copybooks are normal in real mainframe code"
+    - "no LLM repair of real code (an LLM-edited file is no longer real code)"
+  thresholds_config: configs/data/stack_v1_cobol.yaml
+
+provenance_fields_required:
+  - source            # "stack_v1_cobol"
+  - original_path
+  - original_license
+  - content_sha256
+  - syntax_check      # pass | fail | skipped
+
+notes:
+  - "The Stack v1 COBOL is also re-exported inside Dolma (stack-code/cobol); do not add Dolma as a separate source, it duplicates this data."
+  - "Decontaminate against benchmarks/ before building clean-corpus (see benchmarks.yaml)."
+  - "v1 is used for COBOL instead of v2 because v1 ships file contents directly; v2 needs a separate Software Heritage download (see CLAUDE.md Key decisions)."
+  - "Role of the corpus in training is still open: continued pretraining (not yet a stage in CLAUDE.md) or seeds/reference only."

@@ -28,10 +28,12 @@ W&B dashboards + model registry, base-vs-adapted evaluation report, live before/
 - SFT data uses **non-thinking mode**. Evaluate in both thinking and non-thinking modes.
 
 ## Pipeline
-1. **Collect** — The Stack v2 (COBOL subset), GitHub → `raw-corpus`
+1. **Collect** — The Stack v1 dedup (COBOL subset; v2 needs a separate Software Heritage download),
+   X-COBOL (GitHub), IBM Project CodeNet → `raw-corpus`; CodeNet problems + I/O tests → `task-pool`.
+   One manifest per source in `data/manifests/`.
 2. **Clean** — exact + MinHash dedup, license filter, **decontaminate against COBOLEval**
    (NeMo Curator or datatrove) → `clean-corpus`
-3. **Instruction data via rejection sampling** — the model generates many solutions per task;
+3. **Instruction data via rejection sampling** — the model generates many solutions per `task-pool` task;
    keep only those that compile with GnuCOBOL and pass tests → `sft-dataset`
 4. **SFT** — TRL + PEFT (QLoRA) → `adapter`
 5. **Preference tuning** — DPO on offline pass/fail pairs (primary). GRPO with compile + test reward
@@ -63,7 +65,9 @@ W&B dashboards + model registry, base-vs-adapted evaluation report, live before/
 
 ## Repo layout
 ```
+benchmarks/              # eval benchmarks (submodules / pinned clones), never trained on
 configs/                 # Hydra configs per stage
+data/manifests/          # committed source manifests; rest of data/ is gitignored scratch
 docker/                  # train, serve, eval-sandbox images
 docs/                    # project brief, setup notes
 reports/                 # evaluation report

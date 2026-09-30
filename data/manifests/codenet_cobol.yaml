@@ -1,0 +1,68 @@
+name: codenet_cobol
+role: tasks_and_train   # primary task source for rejection sampling (tasks + I/O tests) and accepted COBOL solutions
+description: >
+  IBM Project CodeNet (competitive-programming problems). Used for two things:
+  (1) problem statements with input/output test cases as the task pool for
+  rejection sampling (pipeline step 3), and (2) accepted COBOL submissions as
+  real, test-verified COBOL. The original release is used rather than a Hugging
+  Face mirror because only it carries problem descriptions, submission status
+  and test data.
+
+source:
+  type: original_release
+  project_repo: https://github.com/IBM/Project_CodeNet
+  paper: https://arxiv.org/abs/2105.12655      # Puri et al., 2021
+  archives:                     # TODO: take exact URLs and checksums from the project README at download time
+    - name: Project_CodeNet.tar.gz              # full dataset: data/, metadata/, problem_descriptions/, derived/
+      url: null
+      sha256: null
+  parts_used:
+    - "problem_descriptions/<problem_id>.html"
+    - "metadata/<problem_id>.csv (status, language, submission id)"
+    - "data/<problem_id>/COBOL/<submission_id>.cbl"
+    - "derived/input_output/data/<problem_id>/{input,output}.txt"   # TODO: verify path and coverage
+  version: null                 # TODO: record release version / date
+  alternative:
+    repo: iNeil77/CodeNet       # HF mirror, COBOL code only (~296 kB); no descriptions, status or tests
+    note: "do not use for rejection sampling"
+
+license:
+  declared: null                # TODO: read the license in the Project_CodeNet repo (dataset and tools may differ)
+  verified: false
+
+download:
+  method: custom_script
+  script: src/onprem_codegen/data/download_codenet.py   # TODO: write; extracts only the parts above
+  target_dir: data/raw/codenet_cobol/    # scratch only; the output lives in W&B
+  date_downloaded: null         # TODO
+
+integrity:
+  num_problems_with_tests: null # TODO
+  num_cobol_submissions: null   # TODO
+  num_cobol_accepted: null      # TODO
+  sha256_of_export: null        # TODO
+
+outputs:
+  - wandb_artifact: raw-corpus            # accepted COBOL submissions, source=codenet_cobol
+    artifact_type: dataset
+  - wandb_artifact: task-pool             # problem statement + I/O tests, input to rejection sampling
+    artifact_type: dataset
+
+pipeline:
+  planned_steps:
+    - "keep problems that have I/O test data; convert HTML statements to plain-text prompts"
+    - "keep COBOL submissions with status Accepted; re-check they compile and pass with our GnuCOBOL version"
+    - "deduplicate against stack_v1_cobol and xcobol"
+    - "rejection sampling: the model writes COBOL for each problem, keep solutions that compile and pass all I/O tests -> sft-dataset"
+    - "problems without COBOL submissions are still usable as tasks (only tests are needed)"
+  thresholds_config: configs/data/codenet_cobol.yaml
+
+provenance_fields_required:
+  - source            # "codenet_cobol"
+  - problem_id
+  - submission_id     # null for rejection-sampled solutions
+  - content_sha256
+
+notes:
+  - "Problems are competitive-programming style (stdin/stdout), not enterprise code. Balance with enterprise-style tasks where possible."
+  - "Overlap with HumanEval-derived benchmarks is unlikely but still run the decontamination script."

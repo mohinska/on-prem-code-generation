@@ -17,7 +17,10 @@ Keep this section up to date whenever you add, move or remove a top-level direct
 
 ```
 .
+├── benchmarks/              # eval benchmarks as git submodules / pinned clones (never trained on)
 ├── configs/                 # Hydra configs, one group per pipeline stage
+├── data/                    # local scratch, gitignored except manifests/
+│   └── manifests/           # one YAML per source: URL, revision, license, checksums, W&B artifact
 ├── docker/
 │   ├── train.Dockerfile     # training + data pipeline (TRL, PEFT, CUDA kernels)
 │   ├── serve.Dockerfile     # vLLM OpenAI-compatible server
@@ -46,7 +49,8 @@ Keep this section up to date whenever you add, move or remove a top-level direct
 | Preference tuning | DPO on offline pass/fail pairs. GRPO with a compile + test reward is a stretch goal on 2× 80 GB. |
 | Reference paper | [COBOL-Coder](https://arxiv.org/html/2604.03986v1) (Dau et al., 2026): compiler-guided validation and multi-stage similarity filtering for COBOL training data. Our research builds on it. |
 | Instruction data | Rejection sampling: we keep only generations that compile with GnuCOBOL and pass the tests. |
-| Data cleaning | Exact + MinHash dedup, license filter, decontamination against COBOLEval. |
+| Data sources | The Stack v1 dedup (COBOL; v1 ships file contents, v2 needs a Software Heritage download), X-COBOL, IBM Project CodeNet (tasks with I/O tests for rejection sampling). The Stack v2 Java as optional seeds for synthetic Java→COBOL. One manifest per source in `data/manifests/`. |
+| Data cleaning | Exact + MinHash dedup, license filter, decontamination against COBOLEval, CobolCodeBench and HumanEval. |
 | Evaluation | pass@1 and pass@10 on COBOLEval in thinking and non-thinking modes, compile rate, and HumanEval-Python to catch forgetting. |
 | Tracking | Hosted W&B. Every stage reads its inputs from W&B artifacts and logs new ones. The model registry uses `candidate` → `production` aliases. |
 | Compute | Vast.ai team account. 1× 80 GB by default, 2× 80 GB only for GRPO and final runs. Instances are ephemeral. |

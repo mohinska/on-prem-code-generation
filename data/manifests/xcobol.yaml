@@ -1,0 +1,64 @@
+name: xcobol
+role: train
+description: >
+  X-COBOL: COBOL files mined from open-source GitHub repositories, with
+  repository metadata. Small, curated set; used to supplement and cross-check
+  the Stack v1 COBOL subset.
+
+source:
+  type: zenodo
+  doi_v1: 10.5281/zenodo.7968845        # v1, 2023: 84 repos, 1,255 COBOL files
+  url_v1: https://zenodo.org/records/7968845
+  url_v2: https://zenodo.org/records/14269462   # v2, Dec 2024: 168 repos, 5,195 COBOL files
+  version_used: v2
+  paper: https://arxiv.org/abs/2306.04892
+
+license:
+  declared: "CC BY 4.0 (dataset record, v2)"
+  constraints:
+    - "Attribute the X-COBOL authors (Ali, Manjunath, Chimalakonda)."
+    - "The CC BY license covers the dataset record; the COBOL files inside come from repositories with their own licenses. Record each repo's license before training."
+  verified: false                        # TODO: check per-repo licenses in final_repo_statistics.csv or the GitHub repos
+
+download:
+  method: manual_or_script
+  files:
+    - name: COBOL_Files.zip
+      size: 50.8 MB
+      md5: cbd974caed72b0836777dc2305928ed3
+    - name: file_stats.csv
+      md5: 5635b6a7b52b44c7dd23fe76b11cfeba
+    - name: final_repo_statistics.csv
+      md5: cf14c767f49543f7d4701a38708cee98
+  target_dir: data/raw/xcobol/    # scratch only; the output lives in W&B
+  date_downloaded: null                  # TODO
+
+integrity:
+  checksum_algorithm: md5                # as published by Zenodo
+  verify_on_download: true
+
+outputs:
+  - wandb_artifact: raw-corpus        # source=xcobol
+    artifact_type: dataset
+  - wandb_artifact: clean-corpus
+    artifact_type: dataset
+
+pipeline:
+  planned_steps:
+    - "license filter: keep only files from permissively licensed repos"
+    - "apply the same filters as stack_v1_cobol (syntax check as a tag, no LLM repair)"
+    - "exact + near-duplicate removal against stack_v1_cobol (expect heavy overlap)"
+    - "decontaminate against benchmarks (see benchmarks.yaml)"
+  thresholds_config: configs/data/xcobol.yaml
+
+provenance_fields_required:
+  - source            # "xcobol"
+  - repo_name
+  - original_path
+  - repo_license
+  - content_sha256
+
+notes:
+  - "The XMainframe paper criticizes the repository selection (GitHub stars as a quality filter); treat as uneven quality."
+  - "The dataset's project page mentions 182 projects while the Zenodo v2 record says 168; record the counts you actually observe after download."
+  - "Also usable as a held-out sample of real code for checking how well synthetic data matches real COBOL."

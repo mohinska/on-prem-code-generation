@@ -1,0 +1,66 @@
+name: stack_v2_java_seed
+role: seed             # input to synthetic generation, not trained on directly
+description: >
+  Java subset of The Stack v2 (deduplicated), used as the seed corpus for
+  synthetic Java -> COBOL translation, following the COBOL-Coder paper.
+
+source:
+  type: huggingface_dataset
+  repo: bigcode/the-stack-v2-dedup
+  url: https://huggingface.co/datasets/bigcode/the-stack-v2-dedup
+  subset: data/Java             # TODO: verify exact data_dir name on the dataset card
+  revision: null                # TODO: pin the commit hash at download time
+  gated: true
+  content_location: >
+    The HF dataset is expected to hold file metadata; file contents are fetched
+    separately from Software Heritage. TODO: confirm on the dataset card and
+    record the access method used.
+
+license:
+  declared: "mixed - permissively licensed files; each file keeps its original license"
+  constraints:
+    - "Follow each file's original license; keep license metadata per record."
+    - "Do not redistribute the data in this repo."
+  verified: false               # TODO
+
+download:
+  method: custom_script         # metadata via datasets, contents via Software Heritage
+  script: src/onprem_codegen/data/download_stack_v2_java.py   # TODO: write
+  credentials: "Software Heritage / S3 access keys from env vars (add to .env.example once the access method is confirmed)"
+  target_dir: data/raw/stack_v2_java_seed/    # scratch only; the output lives in W&B
+  sample_limit: null            # TODO: set a cap; the full Java subset is far larger than needed
+  date_downloaded: null         # TODO
+
+integrity:
+  num_files: null               # TODO
+  sha256_of_export: null        # TODO
+
+outputs:
+  - wandb_artifact: java-seeds          # sampled + decontaminated Java files
+    artifact_type: dataset
+  - wandb_artifact: synthetic-java-cobol
+    artifact_type: dataset
+
+pipeline:
+  status: optional              # CLAUDE.md builds SFT data by rejection sampling on tasks with tests; this route has no tests
+  planned_steps:
+    - "sample a subset of Java files (self-contained, compilable with javac)"
+    - "decontaminate the Java seeds against HumanEval BEFORE translation (MultiPL-E / HumanEval-X Java ports would leak into COBOLEval)"
+    - "translate to COBOL with a LOCAL LLM (on-prem constraint; the paper used GPT-4o)"
+    - "GnuCOBOL compile check + repair loop (K=3)"
+    - "LLM pair scoring, keep score >= 0.6"
+    - "back-translate to Java, AST-normalize, CodeBERTScore >= 0.7"
+    - "generate problem descriptions for surviving pairs"
+  thresholds_config: configs/data/synthetic_java_cobol.yaml
+
+provenance_fields_required:
+  - source            # "stack_v2_java_seed"
+  - original_java_path
+  - original_license
+  - translator_model
+  - pair_score
+  - codebertscore
+
+notes:
+  - "Paper numbers for reference: ~279.5K syntactically valid pairs, ~226K after LLM scoring (tau1=0.6). Expect far less at on-prem scale."
+  - "Synthetic data quality depends on the local translator model; log the model and prompt version as W&B artifacts."

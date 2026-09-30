@@ -1,0 +1,62 @@
+name: mainframe_instruct
+role: eval_only        # secondary eval axis (test splits); training on train splits is NOT in CLAUDE.md and needs an explicit decision
+description: >
+  Mainframe-Instruct (released on Hugging Face as MainframeBench): synthetic
+  instruction data about mainframes and COBOL, from the XMainframe project.
+  Three subsets: multiple-choice questions, question answering, COBOL summarization.
+
+source:
+  type: huggingface_dataset
+  repo: Fsoft-AIC/MainframeBench
+  url: https://huggingface.co/datasets/Fsoft-AIC/MainframeBench
+  project_repo: https://github.com/FSoft-AI4Code/XMainframe
+  paper: https://arxiv.org/abs/2408.04660
+  revision: null                # TODO: pin the commit hash at download time
+
+license:
+  declared: null                # TODO: read the HF dataset card
+  verified: false
+
+splits:                          # counts as reported in the XMainframe repo; re-check after download
+  multiple_choice:      {train: 13894, validation: 1544, test: 1931}
+  question_answering:   {train: 18692, validation: 2078, test: 2598}
+  cobol_summarization:  {train: 9081,  validation: 1010, test: 2523}
+
+download:
+  method: datasets.load_dataset
+  command: |
+    from datasets import load_dataset
+    # TODO: confirm config names on the dataset card
+    for cfg in ["multiple_choice", "question_answering", "COBOL_summarization"]:
+        ds = load_dataset("Fsoft-AIC/MainframeBench", cfg)
+  target_dir: data/raw/mainframe_instruct/    # scratch only; the output lives in W&B
+  date_downloaded: null         # TODO
+
+integrity:
+  num_rows_observed: null       # TODO: fill in and compare with the counts above
+  sha256_of_export: null        # TODO
+
+usage_rules:
+  train: "only if training on it is approved: use ONLY the official train (and validation) splits"
+  eval: "use ONLY the official test splits; never mix test rows into training"
+  note: "The XMainframe paper names MainframeBench as the test set of Mainframe-Instruct."
+
+outputs:
+  - wandb_artifact: benchmark-mainframebench   # test splits only
+    artifact_type: benchmark
+
+pipeline:
+  planned_steps:
+    - "convert to the chat/instruction format used by the trainer"
+    - "keep subset and split as record fields"
+    - "run the decontamination check between this test set and all training data"
+  thresholds_config: configs/data/mainframe_instruct.yaml
+
+provenance_fields_required:
+  - source            # "mainframe_instruct"
+  - subset
+  - split
+
+notes:
+  - "This set measures mainframe knowledge and COBOL summarization, not code generation. Report it as a separate evaluation axis from COBOLEval."
+  - "Synthetic (LLM-generated) data: quality was judged by GPT-4 in the original pipeline. Check the dataset license and any terms inherited from the generating model before training on it."

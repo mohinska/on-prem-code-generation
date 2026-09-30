@@ -21,6 +21,14 @@ wandb/
 multirun/
 .hydra/
 
+# Local data scratch (versioned in W&B artifacts); only manifests are committed
+data/*
+!data/manifests/
+
+# Benchmarks are git submodules / pinned clones; ignore anything else dropped there
+benchmarks/*
+!benchmarks/.gitkeep
+
 # Model weights and large data
 *.safetensors
 *.bin

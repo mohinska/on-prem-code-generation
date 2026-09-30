@@ -1,0 +1,98 @@
+name: benchmarks
+role: eval_only
+forbidden_for_training: true    # enforced by the decontamination script
+description: >
+  Evaluation benchmarks for COBOL code generation, plus HumanEval-Python as a
+  regression check for catastrophic forgetting. Kept under benchmarks/ (git
+  submodules or pinned clones) and logged as W&B artifacts; never copied into
+  any training artifact.
+
+evaluation_protocol:
+  metrics: [compile_rate, pass@1, pass@10]   # compile_rate = CSR in the COBOL-Coder paper (arXiv:2604.03986)
+  compiler:
+    name: GnuCOBOL
+    version: null               # TODO: record `cobc --version` from docker/eval-sandbox.Dockerfile
+                                # (Debian bookworm package = 3.1.x). The paper used 2.0.0; note the difference in the report.
+    flags: null                 # TODO: fix one flag set (e.g. -x -free) and reuse it everywhere
+  sandbox: docker/eval-sandbox.Dockerfile     # Vast instances can't run Docker: install the same cobc version natively there
+  modes:                        # every benchmark is run in both modes (CLAUDE.md)
+    non_thinking:
+      enable_thinking: false
+      greedy:  {temperature: 0.0, n: 1}                 # pass@1, comparable with the paper
+      sampled: {temperature: 0.7, top_p: 0.8, n: 20}    # pass@1 and pass@10 (unbiased estimator); TODO: confirm Qwen3.8 recommended values
+    thinking:
+      enable_thinking: true     # Qwen advises against greedy decoding in thinking mode
+      sampled: {temperature: 0.6, top_p: 0.95, n: 20}   # pass@1 and pass@10; TODO: confirm Qwen3.8 recommended values
+      max_new_tokens: null      # TODO: cap thinking length; log truncation rate
+  runs: 3                       # greedy: average of three runs, zero-shot (paper protocol)
+  per_sample_logging: "W&B Table with prompt, generation, compile log, test result, mode"
+
+benchmarks:
+  - name: coboleval
+    task: code_generation
+    url: https://github.com/zorse-project/COBOLEval
+    local_path: benchmarks/coboleval/
+    size: "146 problems (HumanEval translated to COBOL)"
+    revision: null              # TODO: pin commit
+    license: null               # TODO: check repo
+    setup: "git submodule add https://github.com/zorse-project/COBOLEval benchmarks/coboleval"
+    role_in_project: "primary benchmark"
+    wandb_artifact: benchmark-coboleval
+    caveat: "derived from HumanEval (general algorithmic tasks, not enterprise COBOL)"
+
+  - name: cobolcodebench
+    task: code_generation
+    url: https://huggingface.co/datasets/harshini-kumar/CobolCodeBench
+    local_path: benchmarks/cobolcodebench/
+    size: "46 problems (adapted from BigCodeBench-Hard)"
+    revision: null              # TODO: pin commit
+    license: null               # TODO: check dataset card
+    role_in_project: "harder, enterprise-style tasks (financial computation, data processing, reports)"
+    wandb_artifact: benchmark-cobolcodebench
+    caveat: "very small; results are noisy (best model in the paper scored 4.35 Pass@1)"
+
+  - name: humaneval_python
+    task: code_generation
+    url: https://huggingface.co/datasets/openai/openai_humaneval
+    local_path: benchmarks/humaneval_python/
+    size: "164 problems"
+    revision: null              # TODO: pin commit
+    license: "MIT"              # TODO: verify on the dataset card
+    role_in_project: "regression check: base vs adapted must not drop noticeably (catastrophic forgetting)"
+    wandb_artifact: benchmark-humaneval-python
+    sandbox_note: "Python execution also runs in the sandbox (no network, resource limits)"
+
+  - name: cobol_javatrans
+    task: translation           # COBOL->Java and Java->COBOL
+    in_scope: false             # CLAUDE.md covers code generation; enable only if translation is added
+    size: "143 pairs with tests"
+    url: https://github.com/COBOL-Coder/COBOL-Coder   # TODO: verify the URL and that it contains the benchmark files
+    revision: null              # TODO: pin commit
+    local_path: benchmarks/cobol_javatrans/
+    license: null               # TODO
+
+  - name: mainframebench_test
+    task: knowledge_and_summarization
+    in_scope: false             # secondary eval axis, not in CLAUDE.md; enable explicitly if reported
+    reference: data/manifests/mainframe_instruct.yaml   # use the official test splits only
+    local_path: null            # loaded from the raw manifest, not copied here
+
+decontamination:
+  script: src/onprem_codegen/data/decontaminate.py   # TODO: write
+  checks:
+    - "exact match after whitespace/comment normalization"
+    - "near-duplicate match (MinHash) between benchmark prompts/solutions and every training set"
+    - "entry-point / function-name match against HumanEval (catches Java and COBOL ports of HumanEval)"
+  against: [stack_v1_cobol, stack_v2_java_seed, xcobol, codenet_cobol, mainframe_instruct, rejection_sampling, synthetic]
+  benchmarks_checked: [coboleval, cobolcodebench, humaneval_python, cobol_javatrans]
+  when:
+    - "clean stage: before building clean-corpus"
+    - "seed stage: on Java seeds BEFORE translation (HumanEval Java ports from MultiPL-E / HumanEval-X are likely in The Stack v2)"
+    - "sft stage: on every sft-dataset version"
+  fail_on_overlap: true
+  reason: "COBOLEval and COBOL-JavaTrans derive from HumanEval, COBOLCodeBench from BigCodeBench; synthetic generation from those tasks would leak."
+
+wandb:
+  log_as_artifact: true         # one artifact per benchmark (see wandb_artifact), pinned commit in metadata
+  artifact_type: benchmark
+  results_table: eval/results   # base vs adapted, per mode
