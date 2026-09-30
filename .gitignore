@@ -1,0 +1,40 @@
+# Secrets
+.env
+.env.*
+!.env.example
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.ipynb_checkpoints/
+
+# Pipeline outputs (versioned in W&B artifacts, not git)
+outputs/
+checkpoints/
+wandb/
+multirun/
+.hydra/
+
+# Model weights and large data
+*.safetensors
+*.bin
+*.pt
+*.gguf
+*.parquet
+*.jsonl.gz
+
+# COBOL build products from local sandbox runs
+*.so
+*.o
+*.dylib
+
+# OS / editor
+.DS_Store
+.idea/
+.vscode/

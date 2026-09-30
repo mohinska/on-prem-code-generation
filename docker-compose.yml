@@ -1,0 +1,80 @@
+# Usage:
+#   docker compose run --rm train python -m onprem_codegen.train.sft ...
+#   docker compose up serve            # then from laptop: ssh -L 8000:localhost:8000 <vast-host>
+#   docker compose run --rm eval-sandbox cobc -x prog.cbl
+# Secrets and versions come from .env (never committed): WANDB_API_KEY, HF_TOKEN, VLLM_VERSION.
+
+x-gpu: &gpu
+  deploy:
+    resources:
+      reservations:
+        devices:
+          - driver: nvidia
+            count: all
+            capabilities: [gpu]
+
+x-hf-cache: &hf-cache hf-cache:/cache/huggingface
+
+services:
+  train:
+    <<: *gpu
+    build:
+      context: .
+      dockerfile: docker/train.Dockerfile
+    image: onprem-codegen/train
+    shm_size: 16gb
+    ipc: host
+    environment:
+      - WANDB_API_KEY
+      - WANDB_PROJECT=${WANDB_PROJECT:-onprem-codegen}
+      - WANDB_ENTITY
+      - HF_TOKEN
+      - VAST_CONTAINERLABEL
+    volumes:
+      - .:/workspace/on-prem-code-generation
+      - *hf-cache
+
+  serve:
+    <<: *gpu
+    build:
+      context: .
+      dockerfile: docker/serve.Dockerfile
+      args:
+        VLLM_VERSION: ${VLLM_VERSION:?set VLLM_VERSION in .env}
+    image: onprem-codegen/serve
+    ipc: host
+    environment:
+      - HF_TOKEN
+      - MODEL=${MODEL:-Qwen/Qwen3.8-27B}
+    volumes:
+      - ./outputs/adapters:/adapters:ro
+      - *hf-cache
+    # Loopback only: reach it through an SSH tunnel, never a public port.
+    ports:
+      - "127.0.0.1:8000:8000"
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 5s
+      start_period: 600s
+      retries: 3
+
+  eval-sandbox:
+    build:
+      context: .
+      dockerfile: docker/eval-sandbox.Dockerfile
+    image: onprem-codegen/eval-sandbox
+    network_mode: none
+    read_only: true
+    tmpfs:
+      - /tmp:size=256m,exec
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    pids_limit: 128
+    mem_limit: 1g
+    cpus: 1
+    volumes:
+      - ./outputs/generations:/sandbox:rw
+
+volumes:
+  hf-cache:
