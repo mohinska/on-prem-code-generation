@@ -15,6 +15,8 @@ W&B dashboards + model registry, base-vs-adapted evaluation report, live before/
 - **Stack:** TRL + PEFT for training (SFT, DPO, GRPO); Hydra configs per stage;
   dependencies pinned in `requirements.txt` (pip).
 - **Tracking:** hosted W&B (known limitation: metadata leaves premises; data is public).
+- **Reference paper:** COBOL-Coder (Dau et al., arXiv:2604.03986, https://arxiv.org/html/2604.03986v1) —
+  compiler-guided validation + multi-stage similarity filtering for COBOL training data. Our research builds on it.
 - First step: baseline eval of the unmodified model on COBOLEval (thinking and non-thinking) to confirm headroom.
 
 ## Model-specific notes
@@ -75,3 +77,6 @@ Entry points (planned): `make data`, `make train`, `make eval`, `make register`.
 **Keep README.md in sync:** whenever you add, move or remove a top-level directory or module,
 update the "Project structure" section of README.md (and this layout) in the same change.
 The same goes for "Key decisions" when a decision above changes.
+
+## Communication style
+- Keep explanations simple and answers concise. No extra info beyond what was asked.

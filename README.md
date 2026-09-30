@@ -44,6 +44,7 @@ Keep this section up to date whenever you add, move or remove a top-level direct
 | Base model | **`Qwen/Qwen3.8-27B`**: dense 27B, hybrid Gated DeltaNet + Gated Attention, Apache 2.0. We fine-tune the text part only and leave the vision encoder frozen. |
 | Fine-tuning | QLoRA (4-bit) on 1× 80 GB by default. bf16 LoRA only on 2× 80 GB. SFT data is in non-thinking mode. |
 | Preference tuning | DPO on offline pass/fail pairs. GRPO with a compile + test reward is a stretch goal on 2× 80 GB. |
+| Reference paper | [COBOL-Coder](https://arxiv.org/html/2604.03986v1) (Dau et al., 2026): compiler-guided validation and multi-stage similarity filtering for COBOL training data. Our research builds on it. |
 | Instruction data | Rejection sampling: we keep only generations that compile with GnuCOBOL and pass the tests. |
 | Data cleaning | Exact + MinHash dedup, license filter, decontamination against COBOLEval. |
 | Evaluation | pass@1 and pass@10 on COBOLEval in thinking and non-thinking modes, compile rate, and HumanEval-Python to catch forgetting. |
