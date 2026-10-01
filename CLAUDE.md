@@ -1,4 +1,9 @@
-# CLAUDE.md — On-Prem CodeGen (ml lab)
+# CLAUDE.md
+
+This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+
+**Status:** skeleton only. `src/onprem_codegen/*` packages are empty; `requirements.txt`, Makefile,
+Hydra configs and tests don't exist yet (the train image won't build until `requirements.txt` exists).
 
 ## Project goal
 Domain-adapt an open code model to a low-resource / legacy programming language, fully self-hostable
@@ -77,6 +82,25 @@ docker-compose.yml       # local GPU box only; Vast instances can't run Docker
 requirements.txt
 ```
 Entry points (planned): `make data`, `make train`, `make eval`, `make register`.
+
+## Commands (local GPU box)
+```bash
+cp .env.example .env                                   # WANDB_*, HF_TOKEN, VLLM_VERSION
+docker compose run --rm train python -m onprem_codegen.train.sft ...
+docker compose up serve                                # 127.0.0.1:8000; models "base" and "cobol" (adapter)
+docker compose run --rm eval-sandbox cobc -x prog.cbl  # compile/run generated COBOL in isolation
+```
+On Vast.ai, see README "Running on Vast.ai" (images pushed to a registry, no compose).
+
+## Data rules
+- Each manifest declares `role`: `train`, `tasks_and_train`, `seed` (input to synthetic generation only),
+  or `eval_only`. Never train on `eval_only` sources (`benchmarks.yaml`, `mainframe_instruct.yaml`).
+- Pin `source.revision` and confirm `license.verified` at download time (currently TODOs).
+- Downloads go to `data/raw/` scratch; the real output is a W&B artifact.
+- Dataset plan and source priority (start with real COBOL; add Java→COBOL only if data size is the bottleneck):
+  [docs/dataset.md](docs/dataset.md).
+- Execute generated code only inside the `eval-sandbox` container (no network, read-only, resource-capped).
+  Vast instances have no Docker, so execution-based eval runs locally for now.
 
 **Keep README.md in sync:** whenever you add, move or remove a top-level directory or module,
 update the "Project structure" section of README.md (and this layout) in the same change.
