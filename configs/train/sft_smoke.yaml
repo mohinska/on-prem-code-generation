@@ -1,0 +1,48 @@
+# Smoke-test SFT: proves the Vast setup end to end (load, train, W&B, checkpoint, resume).
+# GPU:   python -m onprem_codegen.train.sft
+# Local: python -m onprem_codegen.train.sft model.tiny=true train.max_steps=6 train.save_steps=3
+
+run_name: sft-smoke
+seed: 42
+
+model:
+  name: Qwen/Qwen3.8-27B
+  # Random 4-layer model with the same architecture, for local dry runs without a GPU.
+  tiny: false
+  load_in_4bit: true
+
+lora:
+  r: 16
+  alpha: 32
+  dropout: 0.05
+  # Verified against transformers 5.17 Qwen3_5ForCausalLM.
+  target_modules:
+    - q_proj                 # gated attention (every 4th layer)
+    - k_proj
+    - v_proj
+    - o_proj
+    - in_proj_qkv            # Gated DeltaNet (other layers)
+    - in_proj_z
+    - in_proj_b
+    - in_proj_a
+    - out_proj
+    - gate_proj              # MLP
+    - up_proj
+    - down_proj
+
+data:
+  # W&B artifact with a prompt/completion JSONL; created by scripts/upload_smoke_data.py.
+  artifact: sft-smoke-data:latest
+
+train:
+  output_dir: checkpoints/${run_name}
+  max_steps: 50
+  save_steps: 20
+  logging_steps: 1
+  learning_rate: 2e-4
+  per_device_train_batch_size: 1
+  gradient_accumulation_steps: 4
+  max_length: 1024
+  gradient_checkpointing: true
+  # Resume from the latest local checkpoint, else from the W&B checkpoint artifact.
+  resume: true

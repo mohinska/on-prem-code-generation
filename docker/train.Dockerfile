@@ -1,6 +1,6 @@
 # Training image: SFT / DPO / GRPO with TRL + PEFT (QLoRA), plus data-pipeline stages.
 # Devel base is required: causal-conv1d and flash-linear-attention compile CUDA kernels.
-ARG TORCH_IMAGE=pytorch/pytorch:2.8.0-cuda12.8-cudnn9-devel
+ARG TORCH_IMAGE=pytorch/pytorch:2.11.0-cuda12.8-cudnn9-devel
 FROM ${TORCH_IMAGE}
 
 ENV DEBIAN_FRONTEND=noninteractive \
@@ -20,7 +20,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 # Dependencies only. The code is not baked in: it is bind-mounted locally or git-cloned
 # on the instance, so .git is present and every W&B run can log its commit.
 COPY requirements.txt /tmp/requirements.txt
-RUN pip install --upgrade pip && pip install -r /tmp/requirements.txt
+RUN pip install --upgrade pip && pip install --no-build-isolation -r /tmp/requirements.txt
 
 WORKDIR ${REPO_DIR}
 

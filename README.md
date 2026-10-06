@@ -28,6 +28,7 @@ Keep this section up to date whenever you add, move or remove a top-level direct
 │   └── eval-sandbox.Dockerfile  # GnuCOBOL; runs untrusted generated code
 ├── docs/                    # project brief, setup notes
 ├── reports/                 # evaluation report, figures
+├── scripts/                 # vast_onstart.sh: bootstrap a fresh Vast.ai instance
 ├── src/onprem_codegen/
 │   ├── data/                # collect, clean, dedup, decontaminate, rejection sampling
 │   ├── train/               # SFT, DPO, GRPO
@@ -64,6 +65,20 @@ Known limitation: W&B is hosted, so run metadata leaves our machines. The datase
 Vast.ai instances are already Docker containers, so `docker compose` doesn't work on them. Instead,
 you push our images to a registry and start the instance directly from an image.
 
+**Without a custom image** (smoke tests): start from the stock PyTorch image and let
+`scripts/vast_onstart.sh` clone the repo, install `requirements.txt` and download the model:
+
+```bash
+vastai create instance <OFFER_ID> --image pytorch/pytorch:2.11.0-cuda12.8-cudnn9-devel \
+  --disk 200 --ssh --direct --onstart scripts/vast_onstart.sh
+# on the instance, once /var/log/onstart.log ends with "onstart: done":
+python -m onprem_codegen.data.upload_smoke     # once per W&B project
+python -m onprem_codegen.train.sft             # configs/train/sft_smoke.yaml
+```
+
+Dry-run the same pipeline locally first with a random 4-layer model of the same architecture:
+`python -m onprem_codegen.train.sft model.tiny=true run_name=sft-smoke-local train.max_steps=6 train.save_steps=3`.
+
 ### 1. Build and push the images (once per dependency change)
 
 Build on a Linux x86 machine if you can. On an Apple Silicon Mac, `--platform linux/amd64` works
@@ -82,7 +97,7 @@ docker buildx build --platform linux/amd64 -f docker/serve.Dockerfile \
 ### 2. Set secrets once
 
 In the Vast.ai console, open **Account → Environment Variables** and add `WANDB_API_KEY`,
-`WANDB_ENTITY`, `WANDB_PROJECT` and `HF_TOKEN`. They're injected into every instance. Don't bake
+`WANDB_ENTITY`, `WANDB_PROJECT`, `HF_TOKEN` and `GITHUB_TOKEN` (read-only, for cloning). They're injected into every instance. Don't bake
 them into images or pass them on the command line.
 
 ### 3. Rent an instance

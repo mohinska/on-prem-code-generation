@@ -76,6 +76,7 @@ data/manifests/          # committed source manifests; rest of data/ is gitignor
 docker/                  # train, serve, eval-sandbox images
 docs/                    # project brief, setup notes
 reports/                 # evaluation report
+scripts/                 # Vast.ai instance bootstrap
 src/onprem_codegen/      # data/ train/ eval/ serve/ — run as `python -m onprem_codegen.<stage>...`
 tests/
 docker-compose.yml       # local GPU box only; Vast instances can't run Docker
