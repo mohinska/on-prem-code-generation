@@ -1,4 +1,4 @@
-"""Перевірки контракту onprem_codegen/eval/execute.py. Мають проходити і для stub, і для real-реалізації."""
+"""Contract checks for onprem_codegen/eval/execute.py. Must pass for both the stub and the real implementation."""
 from onprem_codegen.eval.execute import ExecResult, Status, TestCase, execute
 
 TESTS = [TestCase(input="1\n", expected="1\n")]
@@ -18,7 +18,7 @@ def test_invariants_hold():
 
 def test_bad_code_never_raises():
     for code in ["", "   ", "garbage !!!", "\x00"]:
-        execute(code, TESTS)  # не має кидати виняток
+        execute(code, TESTS)  # must not raise
 
 
 def test_empty_program_is_compile_error():

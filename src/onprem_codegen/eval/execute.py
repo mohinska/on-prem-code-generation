@@ -1,19 +1,19 @@
 """
-onprem_codegen/eval/execute.py — контракт виконання згенерованого коду.
+onprem_codegen/eval/execute.py — execution contract for generated code.
 
-СТАТУС: ЗАГЛУШКА (stub). Інтерфейс фінальний, реалізація — ні.
-Справжня компіляція/запуск у sandbox з'явиться пізніше; сигнатура
-execute() і структура ExecResult НЕ змінюватимуться.
+STATUS: STUB. The interface is final; the implementation is not.
+Real compilation/execution in the sandbox will come later; the
+execute() signature and the ExecResult structure will NOT change.
 
-Використання:
+Usage:
     from onprem_codegen.eval.execute import execute, TestCase
 
     res = execute(code, tests=[TestCase(input="5\n", expected="25\n")], lang="cobol")
     if res.passed: ...
 
-Режим вибирається змінною середовища EXECUTE_MODE:
-    stub  (за замовчуванням) — детерміновані фейкові результати, без cobc/docker
-    real  — справжнє виконання в sandbox (поки NotImplementedError)
+The mode is selected by the EXECUTE_MODE environment variable:
+    stub  (default) — deterministic fake results, no cobc/docker
+    real  — real execution in the sandbox (NotImplementedError for now)
 """
 
 from __future__ import annotations
@@ -28,23 +28,23 @@ Lang = Literal["cobol", "python"]
 
 
 class Status(str, Enum):
-    OK = "ok"                        # скомпілювалось і всі тести пройшли
-    COMPILE_ERROR = "compile_error"  # cobc / синтаксис Python впав
-    RUNTIME_ERROR = "runtime_error"  # програма впала під час виконання
-    TIMEOUT = "timeout"              # перевищено timeout_s
-    WRONG_OUTPUT = "wrong_output"    # виконалось, але вивід не збігся з expected
+    OK = "ok"                        # compiled and all tests passed
+    COMPILE_ERROR = "compile_error"  # cobc / Python syntax check failed
+    RUNTIME_ERROR = "runtime_error"  # program crashed at runtime
+    TIMEOUT = "timeout"              # exceeded timeout_s
+    WRONG_OUTPUT = "wrong_output"    # ran, but output didn't match expected
 
 
 @dataclass(frozen=True)
 class TestCase:
-    """Один тест для COBOL: що подати на stdin і що очікувати на stdout."""
-    __test__ = False  # не збирати pytest-ом як тестовий клас
+    """One COBOL test: what to feed on stdin and what to expect on stdout."""
+    __test__ = False  # keep pytest from collecting this as a test class
     input: str
     expected: str
 
 
-# Для COBOL — список TestCase.
-# Для Python (HumanEval) — рядок з кодом тестів (функція check(...) з датасету).
+# For COBOL: a list of TestCase.
+# For Python (HumanEval): a string of test code (the check(...) function from the dataset).
 Tests = Union[list[TestCase], str]
 
 
@@ -59,25 +59,25 @@ class ExecResult:
     run_stdout: str = ""
     run_stderr: str = ""
     duration_s: float = 0.0
-    meta: dict = field(default_factory=dict)  # напр. {"stub": True, "cobc_version": ...}
+    meta: dict = field(default_factory=dict)  # e.g. {"stub": True, "cobc_version": ...}
 
     def to_dict(self) -> dict:
-        """Плоский dict — зручно класти рядком у wandb.Table."""
+        """Flat dict, ready to add as a row to a wandb.Table."""
         d = asdict(self)
         d["status"] = self.status.value
         return d
 
 
 def execute(code: str, tests: Tests, lang: Lang = "cobol", timeout_s: float = 10.0) -> ExecResult:
-    """Компілює (для COBOL) і запускає `code` на `tests`.
+    """Compiles (for COBOL) and runs `code` on `tests`.
 
-    Гарантії контракту:
-      * ніколи не кидає винятків через поганий код — помилки йдуть у status;
-      * passed == True тільки якщо compiled == True і всі тести пройшли;
+    Contract guarantees:
+      * never raises because of bad code; errors go into status;
+      * passed == True only if compiled == True and all tests passed;
       * compiled == False  =>  status == COMPILE_ERROR.
     """
     if lang not in ("cobol", "python"):
-        raise ValueError(f"unsupported lang: {lang}")  # це помилка виклику, не коду
+        raise ValueError(f"unsupported lang: {lang}")  # a caller error, not a code error
 
     mode = os.environ.get("EXECUTE_MODE", "stub")
     if mode == "stub":
@@ -88,10 +88,10 @@ def execute(code: str, tests: Tests, lang: Lang = "cobol", timeout_s: float = 10
 
 
 def _execute_stub(code: str, tests: Tests, lang: Lang) -> ExecResult:
-    """Детермінований фейк: однаковий код -> однаковий результат.
+    """Deterministic fake: same code -> same result.
 
-    Розподіл статусів залежить від хешу коду, тож C бачить усі гілки
-    (compile_error, wrong_output, ok, ...) і може тестувати свою обробку.
+    The status depends on the code hash, so C sees every branch
+    (compile_error, wrong_output, ok, ...) and can test their handling.
     """
     total = len(tests) if isinstance(tests, list) else 1
     base = dict(tests_total=total, meta={"stub": True, "lang": lang})
