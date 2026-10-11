@@ -1,0 +1,2 @@
+# license_ok = license is None (no license found; we keep these) or in this list. Nothing is deleted here.
+allow: [MIT, Apache-2.0, BSD-2-Clause, BSD-3-Clause, ISC, 0BSD, Unlicense, CC0-1.0, CC-BY-4.0, RSA-MD]

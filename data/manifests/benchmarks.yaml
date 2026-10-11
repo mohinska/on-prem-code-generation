@@ -33,8 +33,8 @@ benchmarks:
     url: https://github.com/zorse-project/COBOLEval
     local_path: benchmarks/coboleval/
     size: "146 problems (HumanEval translated to COBOL)"
-    revision: null              # TODO: pin commit
-    license: null               # TODO: check repo
+    revision: 0bb96c3114bb2bb28e221e9d6000614781f8609d
+    license: "MIT"
     setup: "git submodule add https://github.com/zorse-project/COBOLEval benchmarks/coboleval"
     role_in_project: "primary benchmark"
     wandb_artifact: benchmark-coboleval

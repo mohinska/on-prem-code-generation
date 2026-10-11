@@ -28,6 +28,7 @@ data/*
 # Benchmarks are git submodules / pinned clones; ignore anything else dropped there
 benchmarks/*
 !benchmarks/.gitkeep
+!benchmarks/coboleval
 
 # Model weights and large data
 *.safetensors

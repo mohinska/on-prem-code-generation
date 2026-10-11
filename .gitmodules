@@ -1,0 +1,3 @@
+[submodule "benchmarks/coboleval"]
+	path = benchmarks/coboleval
+	url = https://github.com/zorse-project/COBOLEval

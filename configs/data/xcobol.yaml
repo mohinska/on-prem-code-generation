@@ -1,0 +1,7 @@
+name: xcobol
+doi: 10.5281/zenodo.14269462       # v2, Dec 2024: 168 repos, 5,195 COBOL files (v1: 10.5281/zenodo.7968845)
+version: v2
+files:                              # md5 as published by Zenodo
+  COBOL_Files.zip: cbd974caed72b0836777dc2305928ed3
+  final_repo_statistics.csv: cf14c767f49543f7d4701a38708cee98
+# The record ships files, not git clones, so the Zenodo version is the pin (no per-repo commit).
