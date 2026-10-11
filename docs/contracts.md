@@ -31,6 +31,8 @@ named exactly as in the manifest.
 | `xcobol` | `repo_name`, `original_path`, `repo_license` |
 | `codenet_cobol` | `problem_id`, `submission_id` |
 
+`.cpy` files (copybooks, not programs) stay in `clean-corpus`; SFT builders skip rows with `ext == ".cpy"`.
+
 `syntax_check` is `run_program(content, [])`'s `status` plus truncated `stderr`, filled in the clean stage; `raw-corpus` has `{"status": "skipped", "stderr": ""}`.
 
 ### `task-pool` (C)

@@ -101,6 +101,7 @@ On Vast.ai, see README "Running on Vast.ai" (images pushed to a registry, no com
   or `eval_only`. Never train on `eval_only` sources (`benchmarks.yaml`, `mainframe_instruct.yaml`).
 - Pin `source.revision` and confirm `license.verified` at download time (currently TODOs).
 - Downloads go to `data/raw/` scratch; the real output is a W&B artifact.
+- SFT data excludes `.cpy` copybooks (`ext == ".cpy"` in the manifest); they stay in `clean-corpus` as dependencies.
 - Dataset plan and source priority (start with real COBOL; add Java→COBOL only if data size is the bottleneck):
   [docs/dataset.md](docs/dataset.md).
 - Execute generated code only inside the `eval-sandbox` container (no network, read-only, resource-capped).
