@@ -4,7 +4,7 @@
 
 Output: data/raw/clean-corpus/{manifest.parquet (all rows), corpus.jsonl (kept only), stats.json}
 ponytail: reads raw-corpus from local data/raw/raw-corpus (only registers it as run input for lineage);
-download the artifact instead when running on a fresh instance. Decontam and syntax check not yet in.
+download the artifact instead when running on a fresh instance. Syntax check not yet in.
 """
 import argparse
 import collections
@@ -14,6 +14,7 @@ from pathlib import Path
 
 import yaml
 
+from onprem_codegen.data.decontaminate import decontaminate
 from onprem_codegen.data.dedup import exact_dedup, near_dedup
 from onprem_codegen.data.filters import apply_filters
 from onprem_codegen.data.schema import read_manifest, write_manifest
@@ -25,7 +26,7 @@ def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--no-wandb", action="store_true")
     a = ap.parse_args()
-    cfg = {n: yaml.safe_load(Path(f"configs/data/{n}.yaml").read_text()) for n in ("filters", "dedup")}
+    cfg = {n: yaml.safe_load(Path(f"configs/data/{n}.yaml").read_text()) for n in ("filters", "decontam", "dedup")}
 
     records = {}
     for p in RAW.glob("*/corpus.jsonl"):
@@ -35,6 +36,7 @@ def main() -> None:
     contents = {i: d["content"] for i, d in records.items()}
 
     rows = apply_filters(read_manifest(str(RAW / "manifest.parquet")), contents, cfg["filters"])
+    rows, report = decontaminate(rows, contents, cfg["decontam"])
     rows = near_dedup(exact_dedup(rows), contents, cfg["dedup"])
 
     OUT.mkdir(parents=True, exist_ok=True)
@@ -44,6 +46,7 @@ def main() -> None:
         for i in dict.fromkeys(r.id for r in kept):  # one record per content hash
             f.write(json.dumps(records[i]) + "\n")
 
+    (OUT / "decontam_report.json").write_text(json.dumps(report, indent=1))
     stats = {"files_in": len(rows), "files_kept": len(kept), "bytes_kept": sum(r.n_bytes for r in kept),
              "by_reason": dict(collections.Counter(r.filter_reason or "kept" for r in rows))}
     for key in ("source", "ext", "license"):
@@ -61,6 +64,9 @@ def main() -> None:
             art = wandb.Artifact("clean-corpus", type="dataset", metadata=stats)
             art.add_dir(str(OUT))
             run.log_artifact(art)
+            rep = wandb.Artifact("decontam-report", type="report", metadata={"hits": len(report)})
+            rep.add_file(str(OUT / "decontam_report.json"))
+            run.log_artifact(rep)
 
 
 if __name__ == "__main__":
