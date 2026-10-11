@@ -110,5 +110,9 @@ On Vast.ai, see README "Running on Vast.ai" (images pushed to a registry, no com
 update the "Project structure" section of README.md (and this layout) in the same change.
 The same goes for "Key decisions" when a decision above changes.
 
+## Commit messages
+- One line: `type(scope): message` (e.g. `feat(data): add MinHash dedup`). No body, no Co-Authored-By trailer.
+- When asked for a commit message, reply with ready-to-run commands: `git add <files>`, `git commit -m "..."`, `git push`.
+
 ## Communication style
 - Keep explanations simple and answers concise. No extra info beyond what was asked.

@@ -1,0 +1,4 @@
+# Near-dup removal (MinHash + LSH) over rows still kept after filters + exact dedup.
+threshold: 0.8       # Jaccard similarity of token shingles
+num_perm: 128
+shingle: 5           # tokens per shingle

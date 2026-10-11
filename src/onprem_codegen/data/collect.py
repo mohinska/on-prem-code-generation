@@ -46,7 +46,7 @@ def main() -> None:
     if not a.no_wandb:
         import wandb
         commit = subprocess.run(["git", "rev-parse", "HEAD"], capture_output=True, text=True).stdout.strip()
-        with wandb.init(project="onprem-codegen", job_type="collect", config={**cfg, "git_commit": commit}) as run:
+        with wandb.init(project="onprem-codegen", job_type="collect", name=f"collect-{commit[:7]}", config={**cfg, "git_commit": commit}) as run:
             run.summary.update({k: v for k, v in stats.items() if not isinstance(v, dict)})
             art = wandb.Artifact("raw-corpus", type="dataset", metadata=stats)
             art.add_dir(str(OUT))
