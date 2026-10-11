@@ -1,0 +1,4 @@
+name: stack_v1_cobol
+hf_repo: bigcode/the-stack          # full Stack v1, not -dedup: we dedup ourselves, together with X-COBOL and CodeNet
+revision: 153f6301d232928d7f90d09b37fceb4fadc2c950   # dataset repo commit, pinned 2026-10-11
+data_dir: data/cobol

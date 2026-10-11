@@ -19,7 +19,7 @@ named exactly as in the manifest.
   "content_sha256": "…",
   "license": "<SPDX id or null>",
   "meta": {"original_path": "…", "original_license": "…"},
-  "syntax_check": "pass | fail | skipped"
+  "syntax_check": {"status": "ok | compile_error | timeout | skipped", "stderr": "<first 500 chars>"}
 }
 ```
 
@@ -31,7 +31,7 @@ named exactly as in the manifest.
 | `xcobol` | `repo_name`, `original_path`, `repo_license` |
 | `codenet_cobol` | `problem_id`, `submission_id` |
 
-`syntax_check` is filled in the clean stage; `raw-corpus` has `"skipped"`.
+`syntax_check` is `run_program(content, [])`'s `status` plus truncated `stderr`, filled in the clean stage; `raw-corpus` has `{"status": "skipped", "stderr": ""}`.
 
 ### `task-pool` (C)
 
@@ -65,7 +65,7 @@ Same `prompt` / `completion` shape as `tests/fixtures/sft_smoke.jsonl`, which `t
 ### Eval generations (A, logged as a W&B Table)
 
 Columns: `task_id`, `benchmark`, `mode` (`thinking` / `non_thinking`), `sample_idx`, `prompt`,
-`generation`, `program`, `compiled`, `passed`, `compile_log`, `error`.
+`generation`, `program`, `status`, `stderr`, `duration_s`.
 
 ## 2. Executor API (A owns, B and C call)
 
@@ -73,24 +73,26 @@ Module: `src/onprem_codegen/eval/execute.py`. A ships a stub with these exact si
 (it may compile with local `cobc` before the sandbox is ready); C codes against it from day 2.
 
 ```python
-@dataclass
-class Result:
-    compiled: bool
-    passed: bool              # compiled and every test passed
-    compile_log: str
-    outputs: list[str]        # stdout per test, same order as tests
-    error: str | None         # None | "timeout" | "runtime" | "compile"
+class Result(TypedDict):
+    status: Literal["ok", "compile_error", "runtime_error", "timeout", "test_fail"]
+    stderr: str               # compiler stderr, or program stderr of the first failing test
+    duration_s: float         # total wall time (compile + all runs)
 
 def extract_program(text: str) -> str | None:
     """First ```cobol fenced block in a model answer; None if there is none."""
 
 def run_program(source: str, tests: list[dict], timeout_s: float = 10.0) -> Result:
-    """Compile `source` with GnuCOBOL, run it once per {"input", "output"} test (stdin -> stdout)."""
+    """Compile `source` with GnuCOBOL, run it once per {"input", "output"} test (stdin -> stdout).
+
+    status: compile_error = cobc failed; timeout = compile or a run exceeded timeout_s;
+    runtime_error = non-zero exit; test_fail = ran, output differs; ok = compiled and all tests passed.
+    The first failing step decides the status. tests=[] compiles only (ok = it compiled).
+    """
 ```
 
 Rules:
 - Output match: compare stdout to `output` after stripping trailing whitespace on each line and trailing blank lines.
-- `tests=[]` means compile only (`passed` = `compiled`). B uses this for the syntax check.
+- `tests=[]` means compile only (`cobc -fsyntax-only`, no run), so `compile_error` is distinct from `timeout`. B uses this for the syntax check.
 - Real runs go through the `eval-sandbox` container (no network, read-only, resource caps).
   `cobc` version and flags are fixed once in `data/manifests/benchmarks.yaml` and read from there.
 - COBOLEval has its own test harness. A wraps it behind the same `Result` type, so callers never see the difference.
