@@ -36,7 +36,8 @@ data:
 
 train:
   output_dir: checkpoints/${run_name}
-  max_steps: 50
+  max_steps: 50               # > 0 overrides num_train_epochs
+  num_train_epochs: 1
   save_steps: 20
   logging_steps: 1
   learning_rate: 2e-4

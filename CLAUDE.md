@@ -81,8 +81,10 @@ docs/                    # project brief, setup notes
 reports/                 # evaluation report
 scripts/                 # Vast.ai instance bootstrap
 src/onprem_codegen/      # data/ train/ eval/ serve/ — run as `python -m onprem_codegen.<stage>...`
+                         # prompt.py: build_prompt, shared by SFT data and eval
 tests/
 docker-compose.yml       # local GPU box only; Vast instances can't run Docker
+Makefile                 # pipeline entry points
 requirements.txt
 ```
 Entry points (planned): `make data`, `make train`, `make eval`, `make register`.

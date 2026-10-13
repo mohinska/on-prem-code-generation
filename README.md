@@ -30,12 +30,15 @@ Keep this section up to date whenever you add, move or remove a top-level direct
 ├── reports/                 # evaluation report, figures
 ├── scripts/                 # vast_onstart.sh: bootstrap a fresh Vast.ai instance
 ├── src/onprem_codegen/
-│   ├── data/                # collect, filters, dedup, decontaminate, clean (-> clean-corpus), rejection sampling
+│   ├── prompt.py            # build_prompt: the one user message for SFT data and eval
+│   ├── data/                # collect, filters, dedup, decontaminate, clean (-> clean-corpus), CodeNet download
+│   │                        # (-> task-pool), rejection sampling (-> sft-dataset)
 │   ├── train/               # SFT, DPO, GRPO
 │   ├── eval/                # COBOLEval pass@k, compile rate, HumanEval regression
 │   └── serve/               # adapter export and merge, demo client helpers
 ├── tests/
 ├── docker-compose.yml       # local / on-prem GPU box (not for Vast.ai, see below)
+├── Makefile                 # entry points: make test / codenet / data / sft-data / train
 ├── .env.example             # required environment variables
 └── CLAUDE.md                # working notes for Claude Code
 ```
