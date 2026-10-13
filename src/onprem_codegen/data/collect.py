@@ -2,7 +2,7 @@
 
     python -m onprem_codegen.data.collect [--codenet-root DIR] [--no-wandb]
 
-Output: data/raw/raw-corpus/{manifest.parquet, stack_v1/corpus.jsonl, xcobol/corpus.jsonl, stats.json}
+Output: data/raw/raw-corpus/{manifest.parquet, {stack_v1,xcobol,codenet}/corpus.jsonl, stats.json}
 """
 import argparse
 import collections
@@ -28,11 +28,11 @@ def main() -> None:
     ap.add_argument("--codenet-root")
     ap.add_argument("--no-wandb", action="store_true")
     a = ap.parse_args()
-    cfg = {n: yaml.safe_load((CFG / f"{n}.yaml").read_text()) for n in ("stack_v1_cobol", "xcobol", "licenses")}
+    cfg = {n: yaml.safe_load((CFG / f"{n}.yaml").read_text()) for n in ("stack_v1_cobol", "xcobol", "codenet_cobol", "licenses")}
 
     rows = load_stack_v1(cfg["stack_v1_cobol"], OUT / "stack_v1") + load_xcobol(cfg["xcobol"], a.xcobol_root, OUT / "xcobol")
     if a.codenet_root:
-        rows += load_codenet(a.codenet_root, version="release")
+        rows += load_codenet(a.codenet_root, cfg["codenet_cobol"]["version"], OUT / "codenet", cfg["codenet_cobol"]["license"])
     allow = set(cfg["licenses"]["allow"])
     rows = [replace(r, license_ok=r.license is None or r.license in allow) for r in rows]
     write_manifest(rows, str(OUT / "manifest.parquet"))

@@ -12,31 +12,31 @@ source:
   type: original_release
   project_repo: https://github.com/IBM/Project_CodeNet
   paper: https://arxiv.org/abs/2105.12655      # Puri et al., 2021
-  archives:                     # TODO: take exact URLs and checksums from the project README at download time
-    - name: Project_CodeNet.tar.gz              # full dataset: data/, metadata/, problem_descriptions/, derived/
-      url: null
-      sha256: null
+  archives:                     # URL from the project README; IBM publishes no checksum
+    - name: Project_CodeNet.tar.gz              # full dataset (7.8 GB): data/, metadata/, problem_descriptions/, derived/
+      url: https://codait-cos-dax.s3.us.cloud-object-storage.appdomain.cloud/dax-project-codenet/1.0.0/Project_CodeNet.tar.gz
+      sha256: null              # TODO: download_codenet.py prints it on the first download; pin it here and in configs/data/codenet_cobol.yaml
   parts_used:
     - "problem_descriptions/<problem_id>.html"
     - "metadata/<problem_id>.csv (status, language, submission id)"
     - "data/<problem_id>/COBOL/<submission_id>.cbl"
     - "derived/input_output/data/<problem_id>/{input,output}.txt"   # TODO: verify path and coverage
-  version: null                 # TODO: record release version / date
+  version: "1.0.0"              # release dir in the URL
   alternative:
     repo: iNeil77/CodeNet       # HF mirror, COBOL code only (~296 kB); no descriptions, status or tests
     note: "do not use for rejection sampling"
 
 license:
-  declared: null                # TODO: read the license in the Project_CodeNet repo (dataset and tools may differ)
+  declared: null                # TODO: dataset terms; the repo's LICENSE (Apache-2.0) covers the tools, not necessarily the data
   verified: false
 
 download:
   method: custom_script
-  script: src/onprem_codegen/data/download_codenet.py   # TODO: write; extracts only the parts above
+  script: src/onprem_codegen/data/download_codenet.py   # streams the archive, extracts only the parts above
   target_dir: data/raw/codenet_cobol/    # scratch only; the output lives in W&B
   date_downloaded: null         # TODO
 
-integrity:
+integrity:                      # copy from data/raw/task-pool/stats.json after the first run
   num_problems_with_tests: null # TODO
   num_cobol_submissions: null   # TODO
   num_cobol_accepted: null      # TODO
