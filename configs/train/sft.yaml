@@ -1,0 +1,20 @@
+# First real SFT: QLoRA on the rejection-sampled sft-dataset. Everything not set here comes from sft_smoke.yaml.
+# GPU: python -m onprem_codegen.train.sft --config-name sft run_name=sft-v0
+# run_name is also the W&B run id (resume), so give every new run its own name.
+defaults:
+  - sft_smoke
+  - _self_
+
+run_name: sft-v0
+
+data:
+  # Alias added after B's decontamination check passes on that version (pin e.g. sft-dataset:v0 to reproduce).
+  artifact: sft-dataset:decontaminated
+
+train:
+  max_steps: -1
+  num_train_epochs: 2
+  save_steps: 100
+  logging_steps: 5
+  gradient_accumulation_steps: 16
+  max_length: 4096             # COBOL programs are long; prompt + completion, longer rows are truncated

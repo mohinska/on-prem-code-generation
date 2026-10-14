@@ -1,0 +1,22 @@
+# Rejection sampling: task-pool -> model on A's vLLM server -> run_program -> sft-dataset (passed only).
+task_pool: task-pool:latest           # W&B artifact; --task-pool PATH overrides with a local jsonl
+clean_corpus: clean-corpus:latest     # accepted CodeNet submissions (source=codenet_cobol) are added too; null = skip
+
+server:
+  base_url: http://localhost:8000/v1  # vLLM OpenAI API through the SSH tunnel; env VLLM_BASE_URL overrides
+  model: base                         # served model name (serve-entrypoint.sh: "base" / "cobol")
+  request_timeout_s: 600
+generator_model: Qwen/Qwen3.8-27B     # recorded in meta.generator_model
+
+sampling:                             # non-thinking, like the SFT data itself (CLAUDE.md)
+  n: 16                               # samples per task
+  temperature: 0.7                    # = benchmarks.yaml non_thinking.sampled
+  top_p: 0.8
+  max_tokens: 2048
+concurrency: 8                        # tasks in flight at once
+
+execute:
+  timeout_s: 10.0
+keep:
+  max_per_task: 4                     # distinct passing programs per task, so easy tasks don't dominate
+  drop_hardcoded_output: true         # with 1-2 sample tests, DISPLAY of the expected number is a cheat

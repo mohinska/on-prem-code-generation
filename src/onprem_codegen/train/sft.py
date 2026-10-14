@@ -1,11 +1,13 @@
 """Supervised fine-tuning with QLoRA (TRL + PEFT), traced in W&B.
 
-    python -m onprem_codegen.train.sft                                  # 1x 80 GB GPU
+    python -m onprem_codegen.train.sft                                  # smoke, 1x 80 GB GPU
+    python -m onprem_codegen.train.sft --config-name sft run_name=...   # real run on sft-dataset
     python -m onprem_codegen.train.sft model.tiny=true run_name=...     # local dry run (CPU / MPS)
 
 Restartable: checkpoints are mirrored to W&B, so a fresh instance resumes from the last one.
 """
 
+import math
 import os
 import subprocess
 import tempfile
@@ -136,16 +138,19 @@ def main(cfg: DictConfig) -> None:
 
     ds = load_dataset("json", data_files=str(Path(data_dir) / "sft.jsonl"), split="train")
     ds = ds.map(lambda ex: to_prompt_completion(tok, ex), remove_columns=ds.column_names)
+    steps = cfg.train.max_steps if cfg.train.max_steps > 0 else cfg.train.num_train_epochs * math.ceil(
+        len(ds) / (cfg.train.per_device_train_batch_size * cfg.train.gradient_accumulation_steps))
 
     args = SFTConfig(
         output_dir=cfg.train.output_dir,
         max_steps=cfg.train.max_steps,
+        num_train_epochs=cfg.train.num_train_epochs,
         save_steps=cfg.train.save_steps,
         save_total_limit=2,
         logging_steps=cfg.train.logging_steps,
         learning_rate=cfg.train.learning_rate,
         lr_scheduler_type="cosine",
-        warmup_steps=max(1, cfg.train.max_steps // 10),
+        warmup_steps=max(1, steps // 10),
         per_device_train_batch_size=cfg.train.per_device_train_batch_size,
         gradient_accumulation_steps=cfg.train.gradient_accumulation_steps,
         max_length=cfg.train.max_length,
