@@ -1,8 +1,9 @@
 """
 onprem_codegen/eval/execute.py — execution contract for generated code.
 
-The interface is final. EXECUTE_MODE=stub returns deterministic fake results;
-EXECUTE_MODE=real compiles and runs the code through sandbox.py.
+STATUS: STUB. The interface is final; the implementation is not.
+Real compilation/execution in the sandbox will come later; the
+execute() signature and the ExecResult structure will NOT change.
 
 Usage:
     from onprem_codegen.eval.execute import execute, TestCase
@@ -12,14 +13,7 @@ Usage:
 
 The mode is selected by the EXECUTE_MODE environment variable:
     stub  (default) — deterministic fake results, no cobc/docker
-    real  — real execution in the eval-sandbox (see sandbox.py for EXECUTE_BACKEND)
-
-What `tests` means (the type decides how the code is checked):
-    list[TestCase]    stdin -> stdout, COBOL program is compiled with `cobc -x`
-    list[CallerTest]  COBOLEval: a caller program CALLs the solution and writes the result to a file
-    list[FileIOTest]  CobolCodeBench: input files in, output files compared exactly
-    str               Python: a self-contained test program appended after `code` (it must
-                      call its own check, e.g. a `def check(c): ...` followed by `check(my_func)`)
+    real  — real execution in the sandbox (NotImplementedError for now)
 """
 
 from __future__ import annotations
@@ -29,8 +23,6 @@ import os
 from dataclasses import asdict, dataclass, field
 from enum import Enum
 from typing import Literal, Union
-
-from onprem_codegen.eval import sandbox
 
 Lang = Literal["cobol", "python"]
 
@@ -51,27 +43,9 @@ class TestCase:
     expected: str
 
 
-@dataclass(frozen=True)
-class CallerTest:
-    """COBOLEval test: `caller` is a COBOL main program that CALLs the solution and writes
-    RESULT to `result_file`; the file is parsed by `type` and compared with `expected`."""
-    caller: str
-    expected: str       # Python literal of the expected value, e.g. "True", "[1, 2]"
-    type: str           # Bool | Int | Float | String | List[Int] | List[Float] | List[String]
-    result_file: str    # e.g. "HAS-CLOSE-ELEMENTS.TXT"
-
-
-@dataclass(frozen=True)
-class FileIOTest:
-    """CobolCodeBench test: write `input_files` ({name: content}) into the working directory,
-    run the program, then every file in `expected_outputs` must exist and match exactly."""
-    input_files: dict
-    expected_outputs: dict
-
-
-# COBOL: a list of TestCase / CallerTest / FileIOTest (one kind per list).
-# Python (HumanEval): a string of self-contained test code.
-Tests = Union[list[TestCase], list[CallerTest], list[FileIOTest], str]
+# For COBOL: a list of TestCase.
+# For Python (HumanEval): a string of test code (the check(...) function from the dataset).
+Tests = Union[list[TestCase], str]
 
 
 @dataclass
@@ -109,67 +83,8 @@ def execute(code: str, tests: Tests, lang: Lang = "cobol", timeout_s: float = 10
     if mode == "stub":
         return _execute_stub(code, tests, lang)
     if mode == "real":
-        return _execute_real(code, tests, lang, timeout_s)
+        raise NotImplementedError("Sandbox execution is not implemented yet")
     raise ValueError(f"unknown EXECUTE_MODE: {mode}")
-
-
-# ---------- real execution ----------
-
-COMPILE_TIMEOUT_S = 30.0
-
-
-def _build_job(code: str, tests: Tests, lang: Lang, timeout_s: float) -> dict:
-    """Validates the (lang, tests) combination and builds the sandbox_runner job."""
-    if lang == "python":
-        if not isinstance(tests, str):
-            raise ValueError("python tests must be a str (self-contained test program)")
-        kind, payload = "python", tests
-    else:
-        kinds = {TestCase: "stdin", CallerTest: "caller", FileIOTest: "file_io"}
-        if isinstance(tests, str) or not tests or type(tests[0]) not in kinds                 or any(type(t) is not type(tests[0]) for t in tests):
-            raise ValueError("cobol tests must be a non-empty list of one test type: "
-                             "TestCase, CallerTest or FileIOTest")
-        kind, payload = kinds[type(tests[0])], [asdict(t) for t in tests]
-    return {"kind": kind, "code": code, "tests": payload,
-            "timeout_s": timeout_s, "compile_timeout_s": COMPILE_TIMEOUT_S}
-
-
-def _execute_real(code: str, tests: Tests, lang: Lang, timeout_s: float) -> ExecResult:
-    job = _build_job(code, tests, lang, timeout_s)
-    backend = os.environ.get("EXECUTE_BACKEND", "docker")
-    total = len(tests) if isinstance(tests, list) else 1
-    meta = {"stub": False, "lang": lang, "kind": job["kind"], "backend": backend}
-
-    if not code.strip():   # nothing to compile; skip the container start
-        return ExecResult(Status.COMPILE_ERROR, compiled=False, passed=False, tests_total=total,
-                          compile_stderr="empty program", meta=meta)
-
-    # Every COBOLEval test is compiled separately, hence one compile slot per test.
-    budget_s = COMPILE_TIMEOUT_S * total + timeout_s * total + 10.0
-    raw = sandbox.run_job(job, budget_s, backend)
-    meta["cobc_version"] = raw.get("cobc_version", "")
-    return _result_from_raw(raw, total, meta)
-
-
-def _result_from_raw(raw: dict, total: int, meta: dict) -> ExecResult:
-    if not raw["compiled"]:
-        return ExecResult(Status.COMPILE_ERROR, compiled=False, passed=False, tests_total=total,
-                          compile_stderr=raw.get("compile_stderr", ""), meta=meta)
-    runs = raw["tests"]
-    failed = [t for t in runs if t["status"] != "ok"]
-    shown = failed[0] if failed else runs[-1]    # show the first failure, else the last run
-    return ExecResult(
-        Status(shown["status"]) if failed else Status.OK,
-        compiled=True,
-        passed=not failed,
-        tests_passed=len(runs) - len(failed),
-        tests_total=total,
-        compile_stderr=raw.get("compile_stderr", ""),
-        run_stdout=shown["stdout"],
-        run_stderr=shown["stderr"],
-        duration_s=sum(t["duration_s"] for t in runs),
-        meta=meta,
-    )
 
 
 def _execute_stub(code: str, tests: Tests, lang: Lang) -> ExecResult:

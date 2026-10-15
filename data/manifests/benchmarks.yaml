@@ -11,11 +11,9 @@ evaluation_protocol:
   metrics: [compile_rate, pass@1, pass@10]   # compile_rate = CSR in the COBOL-Coder paper (arXiv:2604.03986)
   compiler:
     name: GnuCOBOL
-    version: null               # TODO: record `cobc --version` from docker/eval-sandbox.Dockerfile (every ExecResult.meta now carries it)
+    version: null               # TODO: record `cobc --version` from docker/eval-sandbox.Dockerfile
                                 # (Debian bookworm package = 3.1.x). The paper used 2.0.0; note the difference in the report.
-    flags:                      # fixed per protocol, taken from the reference harnesses (sandbox_runner.py)
-      coboleval: "-w -fformat=variable -x"
-      cobolcodebench: "-x"
+    flags: null                 # TODO: fix one flag set (e.g. -x -free) and reuse it everywhere
   sandbox: docker/eval-sandbox.Dockerfile     # Vast instances can't run Docker: install the same cobc version natively there
   modes:                        # every benchmark is run in both modes (CLAUDE.md)
     non_thinking:
@@ -35,18 +33,9 @@ benchmarks:
     url: https://github.com/zorse-project/COBOLEval
     local_path: benchmarks/coboleval/
     size: "146 problems (HumanEval translated to COBOL)"
-    n_tasks: 146
-    revision: 0bb96c3114bb2bb28e221e9d6000614781f8609d   # HEAD of zorse-project/COBOLEval (formerly BloopAI), 2024-05
-    license: MIT
-    setup: "python -m onprem_codegen.eval.benchmarks --only coboleval   # downloads the pinned file, verifies sha256"
-    fetch:
-      source: github
-      repo: zorse-project/COBOLEval
-      files:
-        completion: {path: data/CobolEval.jsonl, sha256: b018d90bdc53b32c3c76b9a67462e3f572f894dd98f0f084fc779992c7d21264}
-    test_protocol: >
-      per test: cobc -w -fformat=variable -x caller solution, run, read <ENTRY>.TXT, parse by type
-      (reference: scripts/evaluation.py). The reference harness ships with the run step commented out.
+    revision: null              # TODO: pin commit
+    license: null               # TODO: check repo
+    setup: "git submodule add https://github.com/zorse-project/COBOLEval benchmarks/coboleval"
     role_in_project: "primary benchmark"
     wandb_artifact: benchmark-coboleval
     caveat: "derived from HumanEval (general algorithmic tasks, not enterprise COBOL)"
@@ -56,35 +45,19 @@ benchmarks:
     url: https://huggingface.co/datasets/harshini-kumar/CobolCodeBench
     local_path: benchmarks/cobolcodebench/
     size: "46 problems (adapted from BigCodeBench-Hard)"
-    n_tasks: 46
-    revision: 9d02534b7d1aabcbac1a1ec21c5a5e80c50323a8
-    license: apache-2.0
-    fetch:
-      source: huggingface
-      repo: harshini-kumar/CobolCodeBench
-      files:
-        completion: {path: CobolCodeBench_Complete.jsonl, sha256: 3c0d36a1bb769ca7dea6b6402c282744f4ee326ebaa6fe482654fb32f9ac6457}
-        instruct:   {path: CobolCodeBench_Instruct.jsonl, sha256: 52fc79067c3b739f4cb2be560a209c57293cc6db5f9f4c8916978f7b7d9b7e43}
-    test_protocol: >
-      cobc -x, write the input files, run, every expected output file must match exactly
-      (reference: CobolCodeBench-Framework src/evaluator/compile_execute.py)
+    revision: null              # TODO: pin commit
+    license: null               # TODO: check dataset card
     role_in_project: "harder, enterprise-style tasks (financial computation, data processing, reports)"
     wandb_artifact: benchmark-cobolcodebench
     caveat: "very small; results are noisy (best model in the paper scored 4.35 Pass@1)"
 
   - name: humaneval_python
     task: code_generation
-    url: https://github.com/openai/human-eval   # official jsonl; stdlib-only fetch (the HF copy is parquet)
+    url: https://huggingface.co/datasets/openai/openai_humaneval
     local_path: benchmarks/humaneval_python/
     size: "164 problems"
-    n_tasks: 164
-    revision: 6d43fb980f9fee3c892a914eda09951f772ad10d
-    license: "MIT"
-    fetch:
-      source: github
-      repo: openai/human-eval
-      files:
-        completion: {path: data/HumanEval.jsonl.gz, sha256: b796127e635a67f93fb35c04f4cb03cf06f38c8072ee7cee8833d7bee06979ef}
+    revision: null              # TODO: pin commit
+    license: "MIT"              # TODO: verify on the dataset card
     role_in_project: "regression check: base vs adapted must not drop noticeably (catastrophic forgetting)"
     wandb_artifact: benchmark-humaneval-python
     sandbox_note: "Python execution also runs in the sandbox (no network, resource limits)"
