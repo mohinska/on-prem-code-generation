@@ -4,6 +4,7 @@
     python -m onprem_codegen.data.rejection_sampling --dry-run --task-pool tests/fixtures/task_pool_tiny.jsonl --no-wandb
 
 Runs where both the server (SSH tunnel to localhost:8000) and the eval sandbox are reachable; Vast has no Docker.
+Needs EXECUTE_MODE=real (`make sft-data` sets it) and the image from `docker compose build eval-sandbox`.
 Output: data/raw/sft-dataset/{sft.jsonl (contracts.md: sft-dataset), samples.jsonl (every generation with
 its status, input for DPO pairs later), stats.json}. Restartable: tasks already in samples.jsonl are skipped.
 --dry-run replaces the server with canned programs, to test the pipeline without a GPU.
@@ -23,35 +24,11 @@ from pathlib import Path
 
 import yaml
 
+from onprem_codegen.eval.execute import extract_program, run_program
 from onprem_codegen.prompt import build_messages, build_prompt
 
 CFG = Path("configs/data/rejection_sampling.yaml")
 OUT = Path("data/raw/sft-dataset")
-
-
-def _extract_program(text: str) -> str | None:
-    """contracts.md §2 extract_program: first ```cobol fenced block, None if there is none."""
-    m = re.search(r"```cobol[^\n]*\n(.*?)```", text, re.S | re.I)
-    return m.group(1) if m else None
-
-
-def load_executor():
-    """(extract_program, run_program) from eval/execute.py, per contracts.md §2.
-
-    STUB: A's execute.py still has the older execute()/ExecResult API. Until it ships run_program and
-    extract_program, adapt execute() to the contract's Result. Remove this fallback once it does.
-    """
-    from onprem_codegen.eval import execute as ex
-    extract = getattr(ex, "extract_program", _extract_program)
-    if hasattr(ex, "run_program"):
-        return extract, ex.run_program
-
-    def run_program(source: str, tests: list[dict], timeout_s: float = 10.0) -> dict:
-        r = ex.execute(source, [ex.TestCase(t["input"], t["output"]) for t in tests], lang="cobol", timeout_s=timeout_s)
-        status = {"wrong_output": "test_fail"}.get(r.status.value, r.status.value)
-        return {"status": status, "stderr": r.compile_stderr or r.run_stderr, "duration_s": r.duration_s}
-
-    return extract, run_program
 
 
 class VllmClient:
@@ -193,6 +170,8 @@ def main() -> None:
     ap.add_argument("--out", default=str(OUT))
     ap.add_argument("--no-wandb", action="store_true")
     a = ap.parse_args()
+    if not a.dry_run and os.environ.get("EXECUTE_MODE", "stub") != "real":
+        raise SystemExit("EXECUTE_MODE=real is required: the stub executor returns made-up statuses")
     cfg = yaml.safe_load(CFG.read_text())
     out = Path(a.out)
     out.mkdir(parents=True, exist_ok=True)
@@ -206,7 +185,6 @@ def main() -> None:
     pool = Path(a.task_pool) if a.task_pool else Path(run.use_artifact(cfg["task_pool"]).download()) / "task_pool.jsonl"
     tasks = {t["task_id"]: t for t in read_jsonl(pool)[:a.limit]}
 
-    extract, run_program = load_executor()
     client = FakeClient(cfg) if a.dry_run else VllmClient(cfg)
     samples_path = out / "samples.jsonl"
     done = {s["task_id"] for s in read_jsonl(samples_path)} if samples_path.exists() else set()
@@ -214,7 +192,7 @@ def main() -> None:
     print(f"{len(tasks)} tasks, {len(done)} already sampled, {len(todo)} to go")
 
     with open(samples_path, "a") as f, ThreadPoolExecutor(cfg["concurrency"]) as pool_ex:
-        futures = [pool_ex.submit(sample_task, t, client, extract, run_program, cfg) for t in todo]
+        futures = [pool_ex.submit(sample_task, t, client, extract_program, run_program, cfg) for t in todo]
         for k, fut in enumerate(as_completed(futures), 1):
             f.write("".join(json.dumps(s) + "\n" for s in fut.result()))  # one write per task
             f.flush()

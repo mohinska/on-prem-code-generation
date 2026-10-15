@@ -17,8 +17,9 @@ data: codenet
 	$(PY) -m onprem_codegen.data.clean
 
 # Rejection sampling on A's vLLM server (SSH tunnel on :8000) -> sft-dataset
+# Runs generated code in the eval-sandbox image: docker compose build eval-sandbox
 sft-data:
-	$(PY) -m onprem_codegen.data.rejection_sampling $(ARGS)
+	EXECUTE_MODE=real $(PY) -m onprem_codegen.data.rejection_sampling $(ARGS)
 
 # Same pipeline with canned generations and the stub executor; nothing goes to W&B
 sft-data-dry:
