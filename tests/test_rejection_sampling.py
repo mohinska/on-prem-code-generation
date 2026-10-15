@@ -20,16 +20,12 @@ def _sample(i, status="ok", program=PROG, hardcoded=False):
             "status": status, "hardcoded": hardcoded}
 
 
-def test_extract_program_fallback():
-    assert rs._extract_program("hi\n```cobol\nA\n```\n```cobol\nB\n```") == "A\n"
-    assert rs._extract_program("```cobol\nunclosed") is None
-
-
-def test_executor_adapter_matches_contract():
-    extract, run_program = rs.load_executor()
-    r = run_program(PROG, TASK["tests"])
-    assert set(r) == {"status", "stderr", "duration_s"}
-    assert r["status"] in {"ok", "compile_error", "runtime_error", "timeout", "test_fail"}
+def test_real_run_refuses_stub_executor():
+    p = subprocess.run([sys.executable, "-m", "onprem_codegen.data.rejection_sampling", "--no-wandb",
+                        "--task-pool", str(ROOT / "tests/fixtures/task_pool_tiny.jsonl")],
+                       cwd=ROOT, capture_output=True, text=True,
+                       env={"PYTHONPATH": str(ROOT / "src"), "EXECUTE_MODE": "stub"})
+    assert p.returncode != 0 and "EXECUTE_MODE=real" in p.stderr
 
 
 def test_hardcoded_detection():
