@@ -4,7 +4,8 @@ onprem_codegen/eval/sandbox.py: launches sandbox_runner.py for one job and retur
 Backends (env EXECUTE_BACKEND):
     docker  (default) the eval-sandbox image: no network, read-only rootfs, dropped caps,
                       pids/memory/cpu limits. Mirrors the eval-sandbox service in docker-compose.yml.
-                      Build the image first: docker compose build eval-sandbox
+                      Build the image first (`docker compose build` also needs VLLM_VERSION in .env):
+                          docker build -f docker/eval-sandbox.Dockerfile -t onprem-codegen/eval-sandbox .
     local             runs the runner in a plain subprocess on this machine. NOT a sandbox: use it
                       only on a disposable host (a Vast.ai instance with cobc installed natively)
                       or for trusted code such as benchmark canonical solutions.
@@ -84,5 +85,5 @@ def _run_docker(workdir: Path, budget_s: float) -> None:
         subprocess.run(["docker", "rm", "-f", name], capture_output=True)
         raise SandboxError(f"sandbox container exceeded its {budget_s:.0f}s budget") from e
     if p.returncode != 0:
-        raise SandboxError(f"docker run failed (is the image built? `docker compose build eval-sandbox`):\n"
-                           f"{p.stderr[-2000:]}")
+        raise SandboxError(f"docker run failed (is the image built? `docker build -f docker/eval-sandbox.Dockerfile "
+                           f"-t {image} .`):\n{p.stderr[-2000:]}")

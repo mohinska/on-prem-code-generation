@@ -1,8 +1,8 @@
 """EXECUTE_MODE=real: sandbox runner, result mapping and test-type validation.
 
 Python tests use the `local` backend with trusted inline snippets, so they need neither docker
-nor cobc. COBOL execution tests are skipped without a native cobc (run them on a Vast.ai
-instance, or through the docker backend).
+nor cobc. COBOL execution tests use a native cobc if there is one, else the eval-sandbox docker
+image, and are skipped when neither is available.
 """
 import shutil
 import subprocess
@@ -14,7 +14,20 @@ from onprem_codegen.eval import sandbox, sandbox_runner
 from onprem_codegen.eval.execute import CallerTest, FileIOTest, Status, TestCase, execute
 
 CHECK = "def check(c):\n    assert c(2) == 4\n\ncheck(double)\n"
-HAS_COBC = shutil.which("cobc") is not None
+
+
+def _cobol_backend() -> str | None:
+    if shutil.which("cobc"):
+        return "local"
+    try:
+        found = subprocess.run(["docker", "image", "inspect", sandbox.DEFAULT_IMAGE],
+                               capture_output=True, timeout=20).returncode == 0
+    except (OSError, subprocess.TimeoutExpired):
+        found = False
+    return "docker" if found else None
+
+
+COBOL_BACKEND = _cobol_backend()
 
 
 @pytest.fixture(autouse=True)
@@ -174,7 +187,13 @@ def test_missing_docker_is_a_sandbox_error_not_a_verdict(monkeypatch):
 
 # ---------- COBOL end to end (needs cobc) ----------
 
-needs_cobc = pytest.mark.skipif(not HAS_COBC, reason="cobc (GnuCOBOL) is not installed")
+needs_cobc = pytest.mark.skipif(COBOL_BACKEND is None,
+                                reason="needs a native cobc or the eval-sandbox docker image")
+
+
+@pytest.fixture
+def cobol_backend(monkeypatch):
+    monkeypatch.setenv("EXECUTE_BACKEND", COBOL_BACKEND)
 
 HELLO = """       IDENTIFICATION DIVISION.
        PROGRAM-ID. HELLO.
@@ -223,21 +242,21 @@ ADD_ONE_CALLER = """       IDENTIFICATION DIVISION.
 
 
 @needs_cobc
-def test_cobol_stdout_pass_and_fail():
+def test_cobol_stdout_pass_and_fail(cobol_backend):
     assert execute(HELLO, [TestCase("", "HELLO\n")], lang="cobol").passed
     r = execute(HELLO, [TestCase("", "BYE\n")], lang="cobol")
     assert r.status == Status.WRONG_OUTPUT and r.compiled
 
 
 @needs_cobc
-def test_cobol_syntax_error_is_compile_error():
+def test_cobol_syntax_error_is_compile_error(cobol_backend):
     r = execute("THIS IS NOT COBOL", [TestCase("", "")], lang="cobol")
     assert r.status == Status.COMPILE_ERROR and not r.compiled
     assert r.meta["cobc_version"]
 
 
 @needs_cobc
-def test_cobol_caller_protocol():
+def test_cobol_caller_protocol(cobol_backend):
     ok = CallerTest(ADD_ONE_CALLER, "42", "Int", "ADD-ONE.TXT")
     bad = CallerTest(ADD_ONE_CALLER, "43", "Int", "ADD-ONE.TXT")
     assert execute(ADD_ONE, [ok], lang="cobol").passed
@@ -291,6 +310,6 @@ def test_stub_compile_only_never_runs_the_program(monkeypatch):
 
 
 @needs_cobc
-def test_cobol_compile_only_real():
+def test_cobol_compile_only_real(cobol_backend):
     assert execute(HELLO, [], lang="cobol").passed
     assert execute("THIS IS NOT COBOL", [], lang="cobol").status == Status.COMPILE_ERROR

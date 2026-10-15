@@ -11,12 +11,16 @@ evaluation_protocol:
   metrics: [compile_rate, pass@1, pass@10]   # compile_rate = CSR in the COBOL-Coder paper (arXiv:2604.03986)
   compiler:
     name: GnuCOBOL
-    version: null               # TODO: record `cobc --version` from docker/eval-sandbox.Dockerfile (every ExecResult.meta now carries it)
-                                # (Debian bookworm package = 3.1.x). The paper used 2.0.0; note the difference in the report.
+    version: "3.2.0"            # upstream release built in docker/eval-sandbox.Dockerfile (GPG-verified, sha256-pinned);
+                                # every ExecResult.meta["cobc_version"] records it. COBOLEval targets 3.2.0; the
+                                # COBOL-Coder paper used 2.0.0, note the difference in the report.
+                                # 3.1.2 (Debian bookworm) passes only 29/46 CobolCodeBench reference solutions, 3.2.0 passes 38/46.
+    runtime: "defaults (COB_LS_VALIDATE=true: writing invalid data to a LINE SEQUENTIAL file fails with status 71)"
     flags:                      # fixed per protocol, taken from the reference harnesses (sandbox_runner.py)
       coboleval: "-w -fformat=variable -x"
       cobolcodebench: "-x"
-  sandbox: docker/eval-sandbox.Dockerfile     # Vast instances can't run Docker: install the same cobc version natively there
+  sandbox: docker/eval-sandbox.Dockerfile     # Vast instances can't run Docker: build the same GnuCOBOL 3.2.0 natively there
+                                              # (apt gives 3.1.2 on Debian bookworm / Ubuntu, which scores lower)
   modes:                        # every benchmark is run in both modes (CLAUDE.md)
     non_thinking:
       enable_thinking: false
@@ -70,6 +74,19 @@ benchmarks:
     role_in_project: "harder, enterprise-style tasks (financial computation, data processing, reports)"
     wandb_artifact: benchmark-cobolcodebench
     caveat: "very small; results are noisy (best model in the paper scored 4.35 Pass@1)"
+    # Reference solutions that fail in our sandbox (GnuCOBOL 3.2.0, checked 2026-10-15), so the ceiling is 38/46.
+    # The sanity check expects exactly these to fail; report pass@1 over all 46 and over the 42 deterministic tasks.
+    #   nondeterministic: the expected output was recorded from CURRENT-DATE / FUNCTION RANDOM, no program can match it
+    #   broken_reference: the reference itself is wrong
+    canonical_known_failures:
+      task_func_17: {kind: broken_reference, why: "does not compile: subscripts WS-LINE, which is not a table (also on 3.1.2)"}
+      task_func_20: {kind: broken_reference, why: "writes the expected file, then a TAB into a LINE SEQUENTIAL record -> status 71 (passes on 3.1.2, which has no LS validation)"}
+      task_func_21: {kind: nondeterministic, why: "output contains CURRENT-DATE and FUNCTION RANDOM values"}
+      task_func_23: {kind: nondeterministic, why: "dates from CURRENT-DATE and prices from FUNCTION RANDOM"}
+      task_func_47: {kind: broken_reference, why: "reference blanks accented letters, expected output transliterates them; no input encoding reproduces it"}
+      task_func_48: {kind: nondeterministic, why: "scores generated with FUNCTION RANDOM"}
+      task_func_49: {kind: nondeterministic, why: "records generated with FUNCTION RANDOM"}
+      task_func_55: {kind: broken_reference, why: "writes the expected file, then WRITEs to a file opened INPUT -> status 48 (also on 3.1.2)"}
 
   - name: humaneval_python
     task: code_generation
