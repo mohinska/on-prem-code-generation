@@ -1,0 +1,27 @@
+# Baseline eval (CLAUDE.md first step): the unmodified model on every benchmark, in both modes.
+#   python -m onprem_codegen.eval.run --config configs/eval/baseline.yaml [--stage generate|execute|all]
+# Sampling per mode (temperature, top_p, n, max_new_tokens, greedy runs) lives in
+# data/manifests/benchmarks.yaml (evaluation_protocol), not here (docs/contracts.md §3).
+run_name: baseline
+model_name: Qwen/Qwen3.8-27B          # what the server is expected to serve; recorded in W&B
+adapter: null                         # W&B artifact of the LoRA adapter served as server.model, if any
+
+server:
+  base_url: http://localhost:8000/v1  # vLLM OpenAI API through the SSH tunnel; env VLLM_BASE_URL overrides
+  model: base                         # served model name (serve-entrypoint.sh): base | cobol
+  request_timeout_s: 1800             # thinking mode with n=20 is slow
+  concurrency: 8                      # requests in flight
+
+benchmarks:                           # benchmark: task modes
+  coboleval: [completion]
+  cobolcodebench: [completion, instruct]
+  humaneval_python: [completion]      # regression check for forgetting (Python)
+modes: [non_thinking, thinking]
+decodings: [greedy, sampled]          # skipped where the manifest has no such decoding (thinking has no greedy)
+seed: 1234                            # greedy run r and the sampled request use seed + r
+
+execute:
+  timeout_s: 10.0
+  workers: 4                          # sandbox containers in parallel
+ks: [1, 10]
+out_dir: outputs/eval                 # <out_dir>/<run_name>/: generations.jsonl, results.jsonl, metrics.json

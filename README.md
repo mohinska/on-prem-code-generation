@@ -18,7 +18,7 @@ Keep this section up to date whenever you add, move or remove a top-level direct
 ```
 .
 ├── benchmarks/              # eval benchmarks as git submodules / pinned clones (never trained on)
-├── configs/                 # configs per stage (data/ read with yaml, train/ with Hydra)
+├── configs/                 # configs per stage (data/ and eval/ read with yaml, train/ with Hydra)
 ├── data/                    # local scratch, gitignored except manifests/
 │   └── manifests/           # one YAML per source: URL, revision, license, checksums, W&B artifact
 ├── docker/
@@ -34,11 +34,11 @@ Keep this section up to date whenever you add, move or remove a top-level direct
 │   ├── data/                # collect, filters, dedup, decontaminate, clean (-> clean-corpus), CodeNet download
 │   │                        # (-> task-pool), rejection sampling (-> sft-dataset)
 │   ├── train/               # SFT, DPO, GRPO
-│   ├── eval/                # COBOLEval pass@k, compile rate, HumanEval regression
+│   ├── eval/                # sandboxed execute(), benchmark loader, generate -> execute -> metrics -> W&B (run.py)
 │   └── serve/               # adapter export and merge, demo client helpers
 ├── tests/
 ├── docker-compose.yml       # local / on-prem GPU box (not for Vast.ai, see below)
-├── Makefile                 # entry points: make test / codenet / data / sft-data / train
+├── Makefile                 # entry points: make test / codenet / data / sft-data / train / eval
 ├── .env.example             # required environment variables
 └── CLAUDE.md                # working notes for Claude Code
 ```
@@ -175,6 +175,21 @@ isolate generated code. Those settings only apply under Docker, via `docker-comp
 Vast instance there is no Docker, so the isolation isn't there. Until we decide how to handle
 this, run execution-based eval (compiling and testing generated COBOL) locally, or on a machine
 where the sandbox runs under Docker.
+
+### Eval (baseline or adapted model)
+
+Generation needs only the vLLM server; execution needs the eval-sandbox image. `eval.run` does both,
+or one stage at a time when they run on different machines. Settings: `configs/eval/baseline.yaml`;
+sampling per mode: `data/manifests/benchmarks.yaml`.
+
+```bash
+docker build -f docker/eval-sandbox.Dockerfile -t onprem-codegen/eval-sandbox .   # once, locally
+make eval                                    # laptop: ssh -L 8000:localhost:8000 <vast-host> first
+# or split:
+make eval-generate                           # on the Vast instance -> eval-generations artifact
+make eval-execute ARGS="--generations eval-generations:baseline"   # locally, in the sandbox
+make eval-dry                                # no GPU, no W&B: canned answers, stub executor
+```
 
 ## Running locally (Docker Compose)
 
