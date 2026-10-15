@@ -112,6 +112,11 @@ Write a complete GnuCOBOL program in fixed format. Read input from standard inpu
 result to standard output. Answer with a single ```cobol code block.
 ```
 
+- **I/O sentence:** the second sentence depends on how the task does I/O; everything else is fixed.
+  `build_prompt(task_text, io=IO_STDIN)` is the default for task-pool and SFT data. Benchmarks whose
+  programs do not use stdin/stdout pass their own sentence (`prompt.py`): `IO_COBOLEVAL` (complete the
+  given program, keep PROGRAM-ID and LINKAGE SECTION, store the answer in RESULT) and `IO_FILES`
+  (CobolCodeBench: read and write the named files). HumanEval is Python and outside this contract.
 - **Template:** the base model tokenizer's own chat template, via `apply_chat_template`. No custom template.
 - **SFT:** `enable_thinking=False`, as in `train/sft.py` (`to_prompt_completion`).
 - **Eval:** both modes. Through vLLM's OpenAI API, pass `chat_template_kwargs={"enable_thinking": false}`

@@ -26,10 +26,12 @@ evaluation_protocol:
       enable_thinking: false
       greedy:  {temperature: 0.0, n: 1}                 # pass@1, comparable with the paper
       sampled: {temperature: 0.7, top_p: 0.8, n: 20}    # pass@1 and pass@10 (unbiased estimator); TODO: confirm Qwen3.8 recommended values
+      max_new_tokens: 4096      # a full COBOL program; eval/run.py logs the truncation rate per mode
     thinking:
       enable_thinking: true     # Qwen advises against greedy decoding in thinking mode
       sampled: {temperature: 0.6, top_p: 0.95, n: 20}   # pass@1 and pass@10; TODO: confirm Qwen3.8 recommended values
-      max_new_tokens: null      # TODO: cap thinking length; log truncation rate
+      max_new_tokens: 16384     # reasoning + program; must fit the server's --max-model-len. Raise it if
+                                # the logged truncation rate is high (truncated answers count as failures)
   runs: 3                       # greedy: average of three runs, zero-shot (paper protocol)
   per_sample_logging: "W&B Table with prompt, generation, compile log, test result, mode"
 
