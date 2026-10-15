@@ -77,3 +77,9 @@ def test_load_pinned_benchmark(name, n, modes):
     assert {t.mode for t in tasks} == modes
     assert len(tasks) == n * len(modes)
     assert all(t.prompt and t.entry_point and t.tests for t in tasks)
+
+
+def test_known_failures_are_well_formed():
+    for name, e in b.manifest().items():
+        for task, v in e.get("canonical_known_failures", {}).items():
+            assert v["kind"] in {"nondeterministic", "broken_reference"} and v["why"], (name, task)

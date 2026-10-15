@@ -6,7 +6,8 @@ onprem_codegen/eval/sanity.py — model-free check that the execution harness wo
     python -m onprem_codegen.eval.sanity --bench humaneval_python --backend local --limit 20
 
 Two controls per benchmark, no LLM involved:
-    positive  the canonical solution of every task must pass (expected 100%)
+    positive  the canonical solution of every task must pass, except the ones listed under
+              canonical_known_failures in data/manifests/benchmarks.yaml (which must still fail)
     negative  a program that solves nothing must fail every task (expected 0%)
 If either is off, the harness (compiler flags, test parsing, sandbox) is broken and any model
 number produced with it is meaningless. Exit code 1 on failure.
@@ -22,7 +23,7 @@ import os
 import sys
 from collections import Counter
 
-from onprem_codegen.eval.benchmarks import Task, load
+from onprem_codegen.eval.benchmarks import Task, load, manifest
 from onprem_codegen.eval.execute import execute
 
 NOTHING = {
@@ -36,18 +37,28 @@ def _run(task: Task, code: str, timeout_s: float):
     return execute(code, task.tests, lang=task.lang, timeout_s=timeout_s)
 
 
-def check(tasks: list[Task], timeout_s: float) -> bool:
+def check(tasks: list[Task], timeout_s: float, known: dict[str, dict] | None = None) -> bool:
+    """`known`: {entry_point: {kind, why}} reference solutions that are expected to fail."""
+    known = known or {}
     ok = True
     with_ref = [t for t in tasks if t.canonical_solution]
     if with_ref:
         results = [_run(t, t.canonical_solution, timeout_s) for t in with_ref]
         passed = sum(r.passed for r in results)
-        print(f"positive control: {passed}/{len(with_ref)} canonical solutions pass")
+        n_known = sum(t.entry_point in known for t in with_ref)
+        print(f"positive control: {passed}/{len(with_ref)} canonical solutions pass "
+              f"(expected {len(with_ref) - n_known}; {n_known} known failures)")
         print(f"  statuses: {dict(Counter(r.status.value for r in results))}")
         for t, r in zip(with_ref, results):
-            if not r.passed:
+            if t.entry_point in known:
+                if r.passed:   # the manifest is out of date, and so is the reported ceiling
+                    print(f"  NOW PASSES {t.task_id}: remove it from canonical_known_failures")
+                    ok = False
+                else:
+                    print(f"  known {t.task_id} [{r.status.value}] {known[t.entry_point]['kind']}")
+            elif not r.passed:
                 print(f"  FAIL {t.task_id} [{r.status.value}] {(r.compile_stderr or r.run_stderr)[:200]!r}")
-        ok &= passed == len(with_ref)
+                ok = False
     else:
         print("positive control: skipped (no reference solution in this benchmark's language)")
 
@@ -76,7 +87,8 @@ def main() -> None:
     if args.limit:
         tasks = tasks[: args.limit]
     print(f"{args.bench}: {len(tasks)} tasks, backend={os.environ.get('EXECUTE_BACKEND', 'docker')}")
-    sys.exit(0 if check(tasks, args.timeout) else 1)
+    known = manifest()[args.bench].get("canonical_known_failures", {})
+    sys.exit(0 if check(tasks, args.timeout, known) else 1)
 
 
 if __name__ == "__main__":
