@@ -36,12 +36,11 @@ benchmarks:
     local_path: benchmarks/coboleval/
     size: "146 problems (HumanEval translated to COBOL)"
     n_tasks: 146
-    revision: 0bb96c3114bb2bb28e221e9d6000614781f8609d   # HEAD of zorse-project/COBOLEval (formerly BloopAI), 2024-05
-    license: MIT
-    setup: "python -m onprem_codegen.eval.benchmarks --only coboleval   # downloads the pinned file, verifies sha256"
+    revision: 0bb96c3114bb2bb28e221e9d6000614781f8609d   # = the submodule commit pinned in benchmarks/coboleval
+    license: "MIT"
+    setup: "git submodule update --init benchmarks/coboleval"
     fetch:
-      source: github
-      repo: zorse-project/COBOLEval
+      source: submodule         # read from the checked-out submodule, not downloaded
       files:
         completion: {path: data/CobolEval.jsonl, sha256: b018d90bdc53b32c3c76b9a67462e3f572f894dd98f0f084fc779992c7d21264}
     test_protocol: >

@@ -8,6 +8,7 @@ Stdlib only, on purpose: it is mounted read-only into the eval-sandbox container
 
 The job format is built by onprem_codegen.eval.execute; the kinds are:
     stdin    cobc -x, feed each test's stdin, compare stdout
+    compile  tests == []: cobc -fsyntax-only, no run
     caller   COBOLEval: cobc -x caller solution, read <ENTRY>.TXT, parse by type
     file_io  CobolCodeBench: write input files, run, compare output files exactly
     python   HumanEval: the candidate code plus a self-contained test program
@@ -235,7 +236,14 @@ def kind_python(job: dict, workdir: Path) -> dict:
     return {"compiled": True, "compile_stderr": "", "tests": [_test_result(status or "ok", p)]}
 
 
-KINDS = {"stdin": kind_stdin, "caller": kind_caller, "file_io": kind_file_io, "python": kind_python}
+def kind_compile(job: dict, workdir: Path) -> dict:
+    """tests == []: syntax check only, nothing is linked or run."""
+    (workdir / "solution.cbl").write_text(job["code"], encoding="utf-8")
+    c = run(["cobc", "-fsyntax-only", "solution.cbl"], workdir, job["compile_timeout_s"])
+    return {"compiled": not _compile_failed(c), "compile_stderr": c["stderr"], "tests": []}
+
+
+KINDS = {"compile": kind_compile, "stdin": kind_stdin, "caller": kind_caller, "file_io": kind_file_io, "python": kind_python}
 
 
 def main(job_path: str) -> None:

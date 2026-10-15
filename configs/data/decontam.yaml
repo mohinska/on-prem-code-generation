@@ -1,0 +1,5 @@
+# Decontamination against COBOLEval (prompts + COBOL tests). Files above the threshold are dropped;
+# PROGRAM-ID name matches are only reported (names like ADD / FIZZ-BUZZ are generic).
+benchmark: benchmarks/coboleval/data/CobolEval.jsonl
+ngram: 10            # tokens per shingle, after uppercasing and stripping comments
+threshold: 0.5       # share of a task's shingles found in the file

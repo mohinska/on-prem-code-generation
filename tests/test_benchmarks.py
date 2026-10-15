@@ -2,7 +2,6 @@
 are already in benchmarks/ (python -m onprem_codegen.eval.benchmarks downloads them)."""
 import json
 import re
-from pathlib import Path
 
 import pytest
 
@@ -15,7 +14,7 @@ def test_manifest_pins_every_fetchable_benchmark():
     assert set(entries) == {"coboleval", "cobolcodebench", "humaneval_python"}
     for name, e in entries.items():
         assert re.fullmatch(r"[0-9a-f]{40}", e["revision"]), name
-        assert e["fetch"]["source"] in b.URL_TEMPLATES, name
+        assert e["fetch"]["source"] in {*b.URL_TEMPLATES, "submodule"}, name
         assert e["n_tasks"] > 0 and e["license"], name
         assert set(e["fetch"]["files"]) <= {"completion", "instruct"}, name
         for f in e["fetch"]["files"].values():
@@ -62,8 +61,8 @@ def test_normalize_humaneval_is_self_contained():
 
 
 def _have(name: str) -> bool:
-    files = b.manifest()[name]["fetch"]["files"].values()
-    return all((b.BENCH_DIR / name / Path(f["path"]).name).is_file() for f in files)
+    spec = b.manifest()[name]["fetch"]
+    return all(b.local_path(name, f, spec["source"]).is_file() for f in spec["files"].values())
 
 
 @pytest.mark.parametrize("name,n,modes", [

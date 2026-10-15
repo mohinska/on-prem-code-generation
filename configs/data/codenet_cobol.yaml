@@ -1,0 +1,20 @@
+name: codenet_cobol
+version: "1.0.0"                     # release dir in the archive URL
+archive:
+  url: https://codait-cos-dax.s3.us.cloud-object-storage.appdomain.cloud/dax-project-codenet/1.0.0/Project_CodeNet.tar.gz
+  sha256: null                       # TODO: IBM publishes none; record the value printed on the first download and pin it
+  size: 7.8 GB
+# Only these members are extracted (fnmatch, relative to the archive root); the rest is streamed past.
+extract:
+  - Project_CodeNet/metadata/*.csv
+  - Project_CodeNet/problem_descriptions/*.html
+  - Project_CodeNet/data/*/COBOL/*
+  - Project_CodeNet/derived/input_output/data/*/*
+license: null                        # TODO: dataset terms (repo code is Apache-2.0); see data/manifests/codenet_cobol.yaml
+
+task_pool:                           # problem statement + I/O tests -> task-pool
+  min_tests: 1
+  min_chars: 50                      # plain-text statement length
+  max_chars: 6000
+  max_non_ascii_ratio: 0.05          # drops Japanese-only statements
+  drop_with_images: true             # the model can't see figures

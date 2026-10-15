@@ -243,3 +243,54 @@ def test_cobol_caller_protocol():
     assert execute(ADD_ONE, [ok], lang="cobol").passed
     r = execute(ADD_ONE, [ok, bad], lang="cobol")
     assert (r.status, r.tests_passed, r.tests_total) == (Status.WRONG_OUTPUT, 1, 2)
+
+
+# ---------- docs/contracts.md section 2 API ----------
+
+def test_extract_program_takes_first_cobol_block():
+    text = "hi\n```cobol\nA\n```\n```cobol\nB\n```"
+    assert execute_mod.extract_program(text) == "A\n"
+    assert execute_mod.extract_program("```cobol\nunclosed") is None
+    assert execute_mod.extract_program("```python\nx\n```") is None
+
+
+def _fake_run_job(raw, seen):
+    def run_job(job, budget_s, backend=None):
+        seen.append(job)
+        return raw
+    return run_job
+
+
+def test_run_program_maps_wrong_output_to_test_fail(monkeypatch):
+    seen = []
+    raw = {"compiled": True, "tests": [_t("wrong_output", err="diff")]}
+    monkeypatch.setattr(sandbox, "run_job", _fake_run_job(raw, seen))
+    r = execute_mod.run_program("PROGRAM", [{"input": "1\n", "output": "2\n"}])
+    assert r["status"] == "test_fail" and r["stderr"] == "diff"
+    assert seen[0]["kind"] == "stdin" and seen[0]["tests"] == [{"input": "1\n", "expected": "2\n"}]
+
+
+def test_run_program_without_tests_only_compiles(monkeypatch):
+    seen = []
+    monkeypatch.setattr(sandbox, "run_job", _fake_run_job({"compiled": True, "tests": []}, seen))
+    r = execute_mod.run_program("PROGRAM", [])
+    assert r["status"] == "ok" and seen[0]["kind"] == "compile"
+
+
+def test_compile_only_failure_is_compile_error(monkeypatch):
+    raw = {"compiled": False, "compile_stderr": "syntax", "tests": []}
+    monkeypatch.setattr(sandbox, "run_job", _fake_run_job(raw, []))
+    r = execute("PROGRAM", [], lang="cobol")
+    assert (r.status, r.compiled, r.passed, r.tests_total) == (Status.COMPILE_ERROR, False, False, 0)
+
+
+def test_stub_compile_only_never_runs_the_program(monkeypatch):
+    monkeypatch.setenv("EXECUTE_MODE", "stub")
+    statuses = {execute(f"program {i}", [], lang="cobol").status for i in range(60)}
+    assert statuses <= {Status.OK, Status.COMPILE_ERROR} and len(statuses) == 2
+
+
+@needs_cobc
+def test_cobol_compile_only_real():
+    assert execute(HELLO, [], lang="cobol").passed
+    assert execute("THIS IS NOT COBOL", [], lang="cobol").status == Status.COMPILE_ERROR

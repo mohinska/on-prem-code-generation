@@ -18,7 +18,7 @@ Keep this section up to date whenever you add, move or remove a top-level direct
 ```
 .
 ├── benchmarks/              # eval benchmarks as git submodules / pinned clones (never trained on)
-├── configs/                 # Hydra configs, one group per pipeline stage
+├── configs/                 # configs per stage (data/ read with yaml, train/ with Hydra)
 ├── data/                    # local scratch, gitignored except manifests/
 │   └── manifests/           # one YAML per source: URL, revision, license, checksums, W&B artifact
 ├── docker/
@@ -30,12 +30,15 @@ Keep this section up to date whenever you add, move or remove a top-level direct
 ├── reports/                 # evaluation report, figures
 ├── scripts/                 # vast_onstart.sh: bootstrap a fresh Vast.ai instance
 ├── src/onprem_codegen/
-│   ├── data/                # collect, clean, dedup, decontaminate, rejection sampling
+│   ├── prompt.py            # build_prompt: the one user message for SFT data and eval
+│   ├── data/                # collect, filters, dedup, decontaminate, clean (-> clean-corpus), CodeNet download
+│   │                        # (-> task-pool), rejection sampling (-> sft-dataset)
 │   ├── train/               # SFT, DPO, GRPO
 │   ├── eval/                # COBOLEval pass@k, compile rate, HumanEval regression
 │   └── serve/               # adapter export and merge, demo client helpers
 ├── tests/
 ├── docker-compose.yml       # local / on-prem GPU box (not for Vast.ai, see below)
+├── Makefile                 # entry points: make test / codenet / data / sft-data / train
 ├── .env.example             # required environment variables
 └── CLAUDE.md                # working notes for Claude Code
 ```
@@ -50,8 +53,8 @@ Keep this section up to date whenever you add, move or remove a top-level direct
 | Preference tuning | DPO on offline pass/fail pairs. GRPO with a compile + test reward is a stretch goal on 2× 80 GB. |
 | Reference paper | [COBOL-Coder](https://arxiv.org/html/2604.03986v1) (Dau et al., 2026): compiler-guided validation and multi-stage similarity filtering for COBOL training data. Our research builds on it. |
 | Instruction data | Rejection sampling: we keep only generations that compile with GnuCOBOL and pass the tests. |
-| Data sources | The Stack v1 dedup (COBOL; v1 ships file contents, v2 needs a Software Heritage download), X-COBOL, IBM Project CodeNet (tasks with I/O tests for rejection sampling). The Stack v2 Java as optional seeds for synthetic Java→COBOL. One manifest per source in `data/manifests/`. |
-| Data cleaning | Exact + MinHash dedup, license filter, decontamination against COBOLEval, CobolCodeBench and HumanEval. |
+| Data sources | The Stack v1, full not `-dedup` (COBOL subset; v1 ships file contents, v2 needs a Software Heritage download; we dedup ourselves), X-COBOL, IBM Project CodeNet (tasks with I/O tests for rejection sampling). The Stack v2 Java as optional seeds for synthetic Java→COBOL. One manifest per source in `data/manifests/`. |
+| Data cleaning | Size/text filters, exact + MinHash dedup, decontamination against COBOLEval (CobolCodeBench and HumanEval planned). Files are flagged (`kept`, `filter_reason`), never deleted. Files without a license are kept. `.cpy` copybooks stay in `clean-corpus` but are excluded from SFT. |
 | Evaluation | pass@1 and pass@10 on COBOLEval in thinking and non-thinking modes, compile rate, and HumanEval-Python to catch forgetting. |
 | Tracking | Hosted W&B. Every stage reads its inputs from W&B artifacts and logs new ones. The model registry uses `candidate` → `production` aliases. |
 | Compute | Vast.ai team account. 1× 80 GB by default, 2× 80 GB only for GRPO and final runs. Instances are ephemeral. |
@@ -59,6 +62,16 @@ Keep this section up to date whenever you add, move or remove a top-level direct
 | Config / deps | Hydra configs per stage; pinned `requirements.txt` (pip). |
 
 Known limitation: W&B is hosted, so run metadata leaves our machines. The datasets are public.
+
+## Cloning
+
+Benchmarks are git submodules (`benchmarks/coboleval`), so clone with submodules:
+
+```bash
+git clone --recurse-submodules <repo-url>
+# already cloned without them:
+git submodule update --init
+```
 
 ## Running on Vast.ai
 

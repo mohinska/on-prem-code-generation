@@ -1,20 +1,20 @@
 name: stack_v1_cobol
 role: train            # train | eval_only
 description: >
-  COBOL subset of The Stack v1 (near-deduplicated). Primary source of real-world
+  COBOL subset of The Stack v1 (full, not -dedup: we dedup ourselves). Primary source of real-world
   COBOL programs for the domain-adaptation corpus.
 
 source:
   type: huggingface_dataset
-  repo: bigcode/the-stack-dedup
-  url: https://huggingface.co/datasets/bigcode/the-stack-dedup
+  repo: bigcode/the-stack
+  url: https://huggingface.co/datasets/bigcode/the-stack
   subset: data/cobol            # loaded via data_dir
-  revision: null                # TODO: pin the commit hash at download time
+  revision: 153f6301d232928d7f90d09b37fceb4fadc2c950   # also in configs/data/stack_v1_cobol.yaml
   gated: true                   # must accept terms on the HF dataset page first
 
 license:
   declared: "mixed - permissively licensed files; each file keeps its original license"
-  terms_of_use: https://huggingface.co/datasets/bigcode/the-stack-dedup
+  terms_of_use: https://huggingface.co/datasets/bigcode/the-stack
   constraints:
     - "Use must follow each file's original license, including attribution where required."
     - "Re-download periodically to honor data-removal (opt-out) requests."
@@ -25,7 +25,7 @@ download:
   method: datasets.load_dataset
   command: |
     from datasets import load_dataset
-    ds = load_dataset("bigcode/the-stack-dedup", data_dir="data/cobol",
+    ds = load_dataset("bigcode/the-stack", data_dir="data/cobol",
                       split="train", streaming=False)
   target_dir: data/raw/stack_v1_cobol/    # scratch only; the output lives in W&B
   date_downloaded: null         # TODO

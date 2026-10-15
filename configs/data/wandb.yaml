@@ -1,0 +1,7 @@
+# W&B artifact names/types for the data stages. Change only with all three work streams agreeing.
+raw-corpus:        # all sources (stack_v1, xcobol, codenet) + manifest.parquet, before any filter
+  type: dataset
+clean-corpus:      # after filters, dedup and decontam; manifest.parquet + stats
+  type: dataset
+decontam-report:   # optional: what was removed and why
+  type: report

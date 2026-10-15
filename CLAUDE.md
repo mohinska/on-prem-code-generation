@@ -49,6 +49,9 @@ W&B dashboards + model registry, base-vs-adapted evaluation report, live before/
 7. **Register** — W&B Model Registry, aliases `candidate` → `production`.
 
 ## W&B conventions
+- Data artifact names/types are pinned in [configs/data/wandb.yaml](configs/data/wandb.yaml): `raw-corpus` (dataset, all sources +
+  `manifest.parquet`, before filters), `clean-corpus` (dataset, after filters/dedup/decontam + stats),
+  `decontam-report` (report, optional, what was removed and why).
 - Every stage consumes its inputs **from W&B artifacts** and logs outputs as new artifact versions,
   so lineage from raw corpus to deployed model is automatic.
 - Every run logs: git commit, config, input/output artifacts, Vast instance ID.
@@ -78,8 +81,10 @@ docs/                    # project brief, setup notes
 reports/                 # evaluation report
 scripts/                 # Vast.ai instance bootstrap
 src/onprem_codegen/      # data/ train/ eval/ serve/ — run as `python -m onprem_codegen.<stage>...`
+                         # prompt.py: build_prompt, shared by SFT data and eval
 tests/
 docker-compose.yml       # local GPU box only; Vast instances can't run Docker
+Makefile                 # pipeline entry points
 requirements.txt
 ```
 Entry points (planned): `make data`, `make train`, `make eval`, `make register`.
@@ -98,6 +103,7 @@ On Vast.ai, see README "Running on Vast.ai" (images pushed to a registry, no com
   or `eval_only`. Never train on `eval_only` sources (`benchmarks.yaml`, `mainframe_instruct.yaml`).
 - Pin `source.revision` and confirm `license.verified` at download time (currently TODOs).
 - Downloads go to `data/raw/` scratch; the real output is a W&B artifact.
+- SFT data excludes `.cpy` copybooks (`ext == ".cpy"` in the manifest); they stay in `clean-corpus` as dependencies.
 - Dataset plan and source priority (start with real COBOL; add Java→COBOL only if data size is the bottleneck):
   [docs/dataset.md](docs/dataset.md).
 - Execute generated code only inside the `eval-sandbox` container (no network, read-only, resource-capped).
@@ -106,6 +112,10 @@ On Vast.ai, see README "Running on Vast.ai" (images pushed to a registry, no com
 **Keep README.md in sync:** whenever you add, move or remove a top-level directory or module,
 update the "Project structure" section of README.md (and this layout) in the same change.
 The same goes for "Key decisions" when a decision above changes.
+
+## Commit messages
+- One line: `type(scope): message` (e.g. `feat(data): add MinHash dedup`). No body, no Co-Authored-By trailer.
+- When asked for a commit message, reply with ready-to-run commands: `git add <files>`, `git commit -m "..."`, `git push`.
 
 ## Communication style
 - Keep explanations simple and answers concise. No extra info beyond what was asked.
