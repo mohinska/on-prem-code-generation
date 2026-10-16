@@ -1,5 +1,6 @@
 """Per-file corpus manifest: one row per file, stored as Parquet next to the corpus
 and logged inside the same W&B artifact (`manifest.parquet`)."""
+import hashlib
 from dataclasses import asdict, dataclass, fields
 
 import pyarrow as pa
@@ -20,13 +21,21 @@ class ManifestRow:
     license: str | None              # SPDX id
     license_ok: bool
     n_bytes: int
-    filter_reason: str | None        # why dropped (None if not dropped by a filter)
-    syntax_check: str                # ok | compile_error | timeout | skipped (run_program status)
-    syntax_error: str | None         # short stderr, <= 500 chars
-    exact_dup_of: str | None         # id of the kept exact duplicate
-    dup_cluster_id: int | None       # MinHash near-dup cluster
-    kept: bool                       # final: in clean-corpus
-    decontam_hit: bool               # matched COBOLEval
+    filter_reason: str | None = None  # why dropped (None if not dropped by a filter)
+    syntax_check: str = "skipped"    # ok | compile_error | timeout | skipped (execute status)
+    syntax_error: str | None = None  # short stderr, <= 500 chars
+    exact_dup_of: str | None = None  # id of the kept exact duplicate
+    dup_cluster_id: int | None = None  # MinHash near-dup cluster
+    kept: bool = True                # final: in clean-corpus
+    decontam_hit: bool = False       # matched COBOLEval
+
+
+def raw_record(source: str, content: str, license: str | None, meta: dict) -> tuple[dict, str, int]:
+    """corpus.jsonl record (contracts.md schema), plus the content sha256 and byte size for the manifest row."""
+    b = content.encode()
+    h = hashlib.sha256(b).hexdigest()
+    return ({"id": h, "source": source, "content": content, "content_sha256": h, "license": license, "meta": meta,
+             "syntax_check": {"status": "skipped", "stderr": ""}}, h, len(b))
 
 
 def write_manifest(rows: list[ManifestRow], path: str) -> None:

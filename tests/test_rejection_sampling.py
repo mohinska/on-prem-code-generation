@@ -1,11 +1,9 @@
-import json
-import subprocess
-import sys
 from pathlib import Path
 
 import yaml
 
 from onprem_codegen.data import rejection_sampling as rs
+from onprem_codegen.eval.execute import ExecResult, Status
 from onprem_codegen.prompt import build_prompt
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -20,14 +18,6 @@ def _sample(i, status="ok", program=PROG, hardcoded=False):
             "status": status, "hardcoded": hardcoded}
 
 
-def test_real_run_refuses_stub_executor():
-    p = subprocess.run([sys.executable, "-m", "onprem_codegen.data.rejection_sampling", "--no-wandb",
-                        "--task-pool", str(ROOT / "tests/fixtures/task_pool_tiny.jsonl")],
-                       cwd=ROOT, capture_output=True, text=True,
-                       env={"PYTHONPATH": str(ROOT / "src"), "EXECUTE_MODE": "stub"})
-    assert p.returncode != 0 and "EXECUTE_MODE=real" in p.stderr
-
-
 def test_hardcoded_detection():
     assert rs.is_hardcoded('           DISPLAY "8".', TASK["tests"])
     assert rs.is_hardcoded("           DISPLAY 8.", TASK["tests"])
@@ -37,7 +27,7 @@ def test_hardcoded_detection():
 
 def test_build_sft_keeps_only_passing_distinct_capped():
     samples = [_sample(0), _sample(1),  # same program twice
-               _sample(2, "test_fail", PROG + "*"), _sample(3, hardcoded=True, program=PROG + "**")]
+               _sample(2, "wrong_output", PROG + "*"), _sample(3, hardcoded=True, program=PROG + "**")]
     samples += [_sample(10 + i, program=PROG + f"      * v{i}\n") for i in range(6)]
     rows, dropped = rs.build_sft(samples, [], CFG)
     assert len(rows) == CFG["keep"]["max_per_task"]
@@ -49,18 +39,26 @@ def test_build_sft_keeps_only_passing_distinct_capped():
     assert r["meta"] == {"generator_model": CFG["generator_model"], "submission_id": None}
 
 
-def test_dry_run_end_to_end(tmp_path):
-    out = tmp_path / "sft"
-    subprocess.run([sys.executable, "-m", "onprem_codegen.data.rejection_sampling", "--dry-run", "--no-wandb",
-                    "--task-pool", str(ROOT / "tests/fixtures/task_pool_tiny.jsonl"), "--out", str(out)],
-                   cwd=ROOT, check=True, env={"PYTHONPATH": str(ROOT / "src"), "EXECUTE_MODE": "stub"})
-    stats = json.loads((out / "stats.json").read_text())
-    assert stats["tasks"] == 3 and stats["samples"] == 3 * CFG["sampling"]["n"]
-    assert stats["by_status"]["no_program"] > 0
-    rows = [json.loads(l) for l in open(out / "sft.jsonl")]
-    assert rows and all(r["source"] == "rejection_sampling" for r in rows)
-    # restart: nothing re-sampled, same output
-    subprocess.run([sys.executable, "-m", "onprem_codegen.data.rejection_sampling", "--dry-run", "--no-wandb",
-                    "--task-pool", str(ROOT / "tests/fixtures/task_pool_tiny.jsonl"), "--out", str(out)],
-                   cwd=ROOT, check=True, env={"PYTHONPATH": str(ROOT / "src"), "EXECUTE_MODE": "stub"})
-    assert json.loads((out / "stats.json").read_text()) == stats
+class FakeClient:
+    def generate(self, messages, sampling, thinking):
+        return [{"content": f"```cobol\n{PROG}```", "finish_reason": "stop"}, {"content": "no code", "finish_reason": "stop"}]
+
+
+def test_sample_task_statuses(monkeypatch):
+    monkeypatch.setattr(rs, "run_program", lambda prog, tests, timeout: {"status": "ok", "stderr": "", "duration_s": 0.1})
+    ok, none = rs.sample_task(TASK, FakeClient(), CFG)
+    assert (ok["status"], none["status"], none["program"]) == ("ok", "no_program", None)
+    assert ok["prompt"] == build_prompt("Print A+B.") and ok["hardcoded"] is False
+
+
+def test_run_program_maps_tests_to_execute(monkeypatch):
+    seen = {}
+
+    def fake_execute(source, tests, timeout_s):
+        seen.update(source=source, tests=tests)
+        return ExecResult(Status.WRONG_OUTPUT, True, False, run_stderr="diff")
+
+    monkeypatch.setattr(rs, "execute", fake_execute)
+    r = rs.run_program("P", [{"input": "1\n", "output": "2\n"}], 5.0)
+    assert r["status"] == "wrong_output" and r["stderr"] == "diff"
+    assert seen["tests"] == [{"input": "1\n", "expected": "2\n"}]

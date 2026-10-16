@@ -46,16 +46,13 @@ def _clip(s: str | bytes | None) -> str:
 def run(cmd: list[str], cwd: Path, timeout: float, stdin: str = "") -> dict:
     """Runs cmd with a hard timeout; the whole process group is killed on timeout."""
     t0 = time.monotonic()
-    posix = os.name == "posix"
     # Minimal environment: generated code gets no tokens or other secrets.
     env = {"PATH": os.environ.get("PATH", ""), "LANG": "C.UTF-8", "HOME": str(cwd)}
-    if os.name == "nt":
-        env["SYSTEMROOT"] = os.environ.get("SYSTEMROOT", "")
     try:
         proc = subprocess.Popen(
             cmd, cwd=cwd, env=env, text=True, errors="replace",
             stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
-            start_new_session=posix,
+            start_new_session=True,
         )
     except OSError as e:   # e.g. cobc is not installed
         return {"returncode": 127, "timed_out": False, "stdout": "", "stderr": f"{e}", "duration_s": 0.0}
@@ -65,10 +62,7 @@ def run(cmd: list[str], cwd: Path, timeout: float, stdin: str = "") -> dict:
     except subprocess.TimeoutExpired:
         timed_out = True
         try:
-            if posix:
-                os.killpg(proc.pid, signal.SIGKILL)
-            else:
-                proc.kill()
+            os.killpg(proc.pid, signal.SIGKILL)
         except OSError:
             pass
         out, err = proc.communicate()
@@ -144,19 +138,24 @@ def _compile_failed(proc: dict) -> bool:
     return proc["timed_out"] or proc["returncode"] != 0
 
 
-def kind_stdin(job: dict, workdir: Path) -> dict:
+def _compile_and_run(job: dict, workdir: Path, run_test) -> dict:
+    """One `cobc -x` build, then `run_test(i, t) -> (process, status)` per test."""
     (workdir / "solution.cbl").write_text(job["code"], encoding="utf-8")
     c = _compile_cobol(["solution.cbl"], "prog", PLAIN_FLAGS, workdir, job["compile_timeout_s"])
     if _compile_failed(c):
         return {"compiled": False, "compile_stderr": c["stderr"], "tests": []}
-    results = []
-    for t in job["tests"]:
+    return {"compiled": True, "compile_stderr": c["stderr"],
+            "tests": [_test_result(status, p) for p, status in (run_test(i, t) for i, t in enumerate(job["tests"]))]}
+
+
+def kind_stdin(job: dict, workdir: Path) -> dict:
+    def run_test(i, t):
         p = run([str(workdir / "prog")], workdir, job["timeout_s"], stdin=t["input"])
         status = _run_status(p)
         if status is None:
             status = "ok" if _norm_stdout(p["stdout"]) == _norm_stdout(t["expected"]) else "wrong_output"
-        results.append(_test_result(status, p))
-    return {"compiled": True, "compile_stderr": c["stderr"], "tests": results}
+        return p, status
+    return _compile_and_run(job, workdir, run_test)
 
 
 def kind_caller(job: dict, workdir: Path) -> dict:
@@ -201,12 +200,7 @@ def _safe_name(name: str) -> str:
 
 
 def kind_file_io(job: dict, workdir: Path) -> dict:
-    (workdir / "solution.cbl").write_text(job["code"], encoding="utf-8")
-    c = _compile_cobol(["solution.cbl"], "prog", PLAIN_FLAGS, workdir, job["compile_timeout_s"])
-    if _compile_failed(c):
-        return {"compiled": False, "compile_stderr": c["stderr"], "tests": []}
-    results = []
-    for i, t in enumerate(job["tests"]):
+    def run_test(i, t):
         rundir = workdir / f"run{i}"
         rundir.mkdir()
         for name, content in t["input_files"].items():
@@ -219,8 +213,8 @@ def kind_file_io(job: dict, workdir: Path) -> dict:
                 path = rundir / _safe_name(name)
                 ok = ok and path.is_file() and path.read_text(encoding="utf-8", errors="replace") == expected
             status = "ok" if ok else "wrong_output"
-        results.append(_test_result(status, p))
-    return {"compiled": True, "compile_stderr": c["stderr"], "tests": results}
+        return p, status
+    return _compile_and_run(job, workdir, run_test)
 
 
 def kind_python(job: dict, workdir: Path) -> dict:

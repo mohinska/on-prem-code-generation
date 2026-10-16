@@ -27,7 +27,7 @@ from pathlib import Path
 
 import yaml
 
-from onprem_codegen.eval.execute import CallerTest, FileIOTest, Lang, Tests
+from onprem_codegen.eval.execute import Lang, Tests
 
 ROOT = Path(__file__).resolve().parents[3]
 MANIFEST = ROOT / "data" / "manifests" / "benchmarks.yaml"
@@ -128,8 +128,8 @@ def normalize_coboleval(rows: list[dict], mode: str) -> list[Task]:
         tests = []
         for t in r["tests"]:
             ast.literal_eval(t["result"]["value"])   # fail at load time, not mid-evaluation
-            tests.append(CallerTest(caller=t["test"], expected=t["result"]["value"],
-                                    type=_result_type(t["result"]["type_"]), result_file=result_file))
+            tests.append({"caller": t["test"], "expected": t["result"]["value"],
+                          "type": _result_type(t["result"]["type_"]), "result_file": result_file})
         out.append(Task(
             task_id=f"coboleval/{r['task_id']}", benchmark="coboleval", mode=mode, lang="cobol",
             prompt=r["prompt"], entry_point=r["entry_point"], tests=tests,
@@ -145,8 +145,7 @@ def normalize_cobolcodebench(rows: list[dict], mode: str) -> list[Task]:
         out.append(Task(
             task_id=f"cobolcodebench/{r['program_name']}", benchmark="cobolcodebench", mode=mode, lang="cobol",
             prompt=r[prompt_key], entry_point=r["program_name"],
-            tests=[FileIOTest(input_files=json.loads(r["inputs"] or "{}"),
-                              expected_outputs=json.loads(r["outputs"] or "{}"))],
+            tests=[{"input_files": json.loads(r["inputs"] or "{}"), "expected_outputs": json.loads(r["outputs"] or "{}")}],
             canonical_solution=r["canonical_solution"],
         ))
     return out

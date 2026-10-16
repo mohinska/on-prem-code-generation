@@ -1,4 +1,4 @@
-"""EXECUTE_MODE=real: sandbox runner, result mapping and test-type validation.
+"""Sandbox runner, result mapping and test-type validation.
 
 Python tests use the `local` backend with trusted inline snippets, so they need neither docker
 nor cobc. COBOL execution tests use a native cobc if there is one, else the eval-sandbox docker
@@ -11,8 +11,9 @@ import pytest
 
 from onprem_codegen.eval import execute as execute_mod
 from onprem_codegen.eval import sandbox, sandbox_runner
-from onprem_codegen.eval.execute import CallerTest, FileIOTest, Status, TestCase, execute
+from onprem_codegen.eval.execute import Status, execute
 
+STDIN = {"input": "", "expected": ""}
 CHECK = "def check(c):\n    assert c(2) == 4\n\ncheck(double)\n"
 
 
@@ -32,7 +33,6 @@ COBOL_BACKEND = _cobol_backend()
 
 @pytest.fixture(autouse=True)
 def real_local(monkeypatch):
-    monkeypatch.setenv("EXECUTE_MODE", "real")
     monkeypatch.setenv("EXECUTE_BACKEND", "local")
 
 
@@ -41,7 +41,6 @@ def real_local(monkeypatch):
 def test_python_pass():
     r = execute("def double(x):\n    return x * 2\n", CHECK, lang="python")
     assert (r.status, r.compiled, r.passed, r.tests_passed, r.tests_total) == (Status.OK, True, True, 1, 1)
-    assert r.meta["stub"] is False
 
 
 def test_python_wrong_output():
@@ -76,7 +75,7 @@ def test_bad_code_never_raises_and_is_compile_error(code):
 
 def test_empty_program_skips_the_sandbox(monkeypatch):
     monkeypatch.setattr(sandbox, "run_job", lambda *a, **k: pytest.fail("sandbox must not start"))
-    assert execute("", [TestCase("", "")], lang="cobol").status == Status.COMPILE_ERROR
+    assert execute("", [STDIN], lang="cobol").status == Status.COMPILE_ERROR
 
 
 # ---------- (lang, tests) validation: caller errors raise ----------
@@ -88,12 +87,12 @@ def test_cobol_with_check_string_is_rejected():
 
 def test_python_with_list_is_rejected():
     with pytest.raises(ValueError):
-        execute("x", [TestCase("", "")], lang="python")
+        execute("x", [STDIN], lang="python")
 
 
 def test_mixed_test_types_are_rejected():
     with pytest.raises(ValueError):
-        execute("x", [TestCase("", ""), FileIOTest({}, {})], lang="cobol")
+        execute("x", [STDIN, {"input_files": {}, "expected_outputs": {}}], lang="cobol")
 
 
 def test_unknown_backend_is_rejected(monkeypatch):
@@ -243,28 +242,28 @@ ADD_ONE_CALLER = """       IDENTIFICATION DIVISION.
 
 @needs_cobc
 def test_cobol_stdout_pass_and_fail(cobol_backend):
-    assert execute(HELLO, [TestCase("", "HELLO\n")], lang="cobol").passed
-    r = execute(HELLO, [TestCase("", "BYE\n")], lang="cobol")
+    assert execute(HELLO, [{"input": "", "expected": "HELLO\n"}], lang="cobol").passed
+    r = execute(HELLO, [{"input": "", "expected": "BYE\n"}], lang="cobol")
     assert r.status == Status.WRONG_OUTPUT and r.compiled
 
 
 @needs_cobc
 def test_cobol_syntax_error_is_compile_error(cobol_backend):
-    r = execute("THIS IS NOT COBOL", [TestCase("", "")], lang="cobol")
+    r = execute("THIS IS NOT COBOL", [STDIN], lang="cobol")
     assert r.status == Status.COMPILE_ERROR and not r.compiled
     assert r.meta["cobc_version"]
 
 
 @needs_cobc
 def test_cobol_caller_protocol(cobol_backend):
-    ok = CallerTest(ADD_ONE_CALLER, "42", "Int", "ADD-ONE.TXT")
-    bad = CallerTest(ADD_ONE_CALLER, "43", "Int", "ADD-ONE.TXT")
+    ok = {"caller": ADD_ONE_CALLER, "expected": "42", "type": "Int", "result_file": "ADD-ONE.TXT"}
+    bad = {"caller": ADD_ONE_CALLER, "expected": "43", "type": "Int", "result_file": "ADD-ONE.TXT"}
     assert execute(ADD_ONE, [ok], lang="cobol").passed
     r = execute(ADD_ONE, [ok, bad], lang="cobol")
     assert (r.status, r.tests_passed, r.tests_total) == (Status.WRONG_OUTPUT, 1, 2)
 
 
-# ---------- docs/contracts.md section 2 API ----------
+# ---------- docs/contracts.md section 2: extract_program, execute ----------
 
 def test_extract_program_takes_first_cobol_block():
     text = "hi\n```cobol\nA\n```\n```cobol\nB\n```"
@@ -280,33 +279,11 @@ def _fake_run_job(raw, seen):
     return run_job
 
 
-def test_run_program_maps_wrong_output_to_test_fail(monkeypatch):
-    seen = []
-    raw = {"compiled": True, "tests": [_t("wrong_output", err="diff")]}
-    monkeypatch.setattr(sandbox, "run_job", _fake_run_job(raw, seen))
-    r = execute_mod.run_program("PROGRAM", [{"input": "1\n", "output": "2\n"}])
-    assert r["status"] == "test_fail" and r["stderr"] == "diff"
-    assert seen[0]["kind"] == "stdin" and seen[0]["tests"] == [{"input": "1\n", "expected": "2\n"}]
-
-
-def test_run_program_without_tests_only_compiles(monkeypatch):
-    seen = []
-    monkeypatch.setattr(sandbox, "run_job", _fake_run_job({"compiled": True, "tests": []}, seen))
-    r = execute_mod.run_program("PROGRAM", [])
-    assert r["status"] == "ok" and seen[0]["kind"] == "compile"
-
-
 def test_compile_only_failure_is_compile_error(monkeypatch):
     raw = {"compiled": False, "compile_stderr": "syntax", "tests": []}
     monkeypatch.setattr(sandbox, "run_job", _fake_run_job(raw, []))
     r = execute("PROGRAM", [], lang="cobol")
     assert (r.status, r.compiled, r.passed, r.tests_total) == (Status.COMPILE_ERROR, False, False, 0)
-
-
-def test_stub_compile_only_never_runs_the_program(monkeypatch):
-    monkeypatch.setenv("EXECUTE_MODE", "stub")
-    statuses = {execute(f"program {i}", [], lang="cobol").status for i in range(60)}
-    assert statuses <= {Status.OK, Status.COMPILE_ERROR} and len(statuses) == 2
 
 
 @needs_cobc

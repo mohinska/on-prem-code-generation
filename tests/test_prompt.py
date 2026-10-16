@@ -1,6 +1,6 @@
 import pytest
 
-from onprem_codegen.prompt import INSTRUCTION, build_messages, build_prompt
+from onprem_codegen.prompt import build_messages, build_prompt, instruction
 
 
 def test_matches_contract_text():
@@ -12,7 +12,7 @@ def test_matches_contract_text():
 
 
 def test_strips_task_whitespace():
-    assert build_prompt("\n  Task.\n\n") == f"Task.\n\n{INSTRUCTION}"
+    assert build_prompt("\n  Task.\n\n") == f"Task.\n\n{instruction()}"
 
 
 def test_empty_task_rejected():

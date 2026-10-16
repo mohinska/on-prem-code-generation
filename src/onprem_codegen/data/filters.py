@@ -1,16 +1,7 @@
-"""Size/text filters over raw-corpus. Sets kept=False and filter_reason; never deletes rows.
-
-    python -m onprem_codegen.data.filters   # reads data/raw/raw-corpus, writes manifest_filtered.parquet
-"""
-import json
+"""Size/text filters over raw-corpus. Sets kept=False and filter_reason; never deletes rows. Run by clean.py."""
 from dataclasses import replace
-from pathlib import Path
 
-import yaml
-
-from onprem_codegen.data.schema import ManifestRow, read_manifest, write_manifest
-
-RAW = Path("data/raw/raw-corpus")
+from onprem_codegen.data.schema import ManifestRow
 
 
 def reason(content: str, cfg: dict) -> str | None:
@@ -33,20 +24,3 @@ def apply_filters(rows: list[ManifestRow], contents: dict[str, str], cfg: dict) 
         why = r.filter_reason or reason(contents[r.id], cfg)
         out.append(replace(r, kept=r.kept and why is None, filter_reason=why))
     return out
-
-
-def main() -> None:
-    cfg = yaml.safe_load(Path("configs/data/filters.yaml").read_text())
-    contents = {}
-    for p in RAW.glob("*/corpus.jsonl"):
-        for line in open(p):
-            d = json.loads(line)
-            contents[d["id"]] = d["content"]
-    rows = apply_filters(read_manifest(str(RAW / "manifest.parquet")), contents, cfg)
-    write_manifest(rows, str(RAW / "manifest_filtered.parquet"))
-    import collections
-    print(collections.Counter(r.filter_reason or "kept" for r in rows))
-
-
-if __name__ == "__main__":
-    main()

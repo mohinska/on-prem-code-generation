@@ -1,20 +1,19 @@
-"""Eval pipeline: prompts, answer parsing, the vLLM request, metrics and a dry run end to end."""
+"""Eval pipeline: prompts, answer parsing, the vLLM request, metrics and the stages end to end."""
 import json
 import math
-import os
-import subprocess
-import sys
 import threading
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from pathlib import Path
 
 import pytest
+import yaml
 
 from onprem_codegen.eval import generate as g
 from onprem_codegen.eval import run as r
 from onprem_codegen.eval.benchmarks import Task
+from onprem_codegen.eval.execute import ExecResult, Status
 from onprem_codegen.eval.metrics import pass_at_k, summarize
-from onprem_codegen.prompt import INSTRUCTION, IO_COBOLEVAL, IO_FILES, build_prompt
+from onprem_codegen.prompt import IO_COBOLEVAL, IO_FILES, build_prompt, instruction
 
 ROOT = Path(__file__).resolve().parent.parent
 
@@ -27,8 +26,8 @@ def _task(bench="coboleval", lang="cobol", prompt="SKELETON", entry="add"):
 # ---------- prompts ----------
 
 def test_sft_prompt_is_unchanged():
-    assert build_prompt("T") == f"T\n\n{INSTRUCTION}"
-    assert "standard input" in INSTRUCTION
+    assert build_prompt("T") == f"T\n\n{instruction()}"
+    assert "standard input" in instruction()
 
 
 def test_benchmark_prompts_use_their_io_sentence():
@@ -167,36 +166,32 @@ def test_nondeterministic_tasks_come_from_the_manifest():
     assert r.nondeterministic_tasks("coboleval") == set()
 
 
-# ---------- end to end ----------
+# ---------- end to end (fake server, fake executor) ----------
 
-def test_dry_run_end_to_end_and_resume(tmp_path):
-    cfg = ROOT / "configs/eval/baseline.yaml"
-    local_cfg = tmp_path / "cfg.yaml"
-    local_cfg.write_text(cfg.read_text(encoding="utf-8").replace("out_dir: outputs/eval", f"out_dir: {tmp_path.as_posix()}"),
-                         encoding="utf-8")
-    cmd = [sys.executable, "-m", "onprem_codegen.eval.run", "--config", str(local_cfg), "--dry-run",
-           "--limit", "1", "--no-wandb", "--run-name", "t"]
-    env = {**os.environ, "PYTHONPATH": str(ROOT / "src"), "EXECUTE_MODE": "stub"}
-    first = subprocess.run(cmd, cwd=ROOT, env=env, capture_output=True, text=True)
-    assert first.returncode == 0, first.stderr
-    out = tmp_path / "t"
-    gens = r.read_jsonl(out / "generations.jsonl")
-    results = r.read_jsonl(out / "results.jsonl")
-    assert len(gens) == len(results) > 0
+def test_generate_execute_and_resume(tmp_path, monkeypatch):
+    cfg = yaml.safe_load((ROOT / "configs/eval/baseline.yaml").read_text(encoding="utf-8"))
+    tasks = r.load_tasks(cfg, 1)
+
+    class FakeClient:
+        def __init__(self, *a):
+            pass
+
+        def generate(self, messages, sampling, thinking):
+            return [{"content": ("<think>t</think>" if thinking else "") + f"```{lang}\nX{i}\n```", "reasoning": None,
+                     "finish_reason": "stop", "completion_tokens": None}
+                    for lang in ["cobol"] for i in range(sampling.get("n", 1))]
+
+    monkeypatch.setattr(r, "VllmClient", FakeClient)
+    monkeypatch.setattr(r, "program_from_answer", lambda task, answer: answer)
+    monkeypatch.setattr(r, "execute", lambda code, tests, lang, timeout_s: ExecResult(Status.OK, True, True))
+
+    gen_path = r.generate(cfg, tasks, tmp_path)
+    results = r.read_jsonl(r.execute_all(cfg, tasks, gen_path, tmp_path))
+    gens = r.read_jsonl(gen_path)
+    assert len(gens) == len(results) > 0 and all(x["passed"] for x in results)
     assert {x["mode"] for x in gens} == {"thinking", "non_thinking"}
-    assert all(x["reasoning"] for x in gens if x["mode"] == "thinking")
-    metrics = json.loads((out / "metrics.json").read_text(encoding="utf-8"))
-    assert "coboleval/completion/non_thinking/greedy" in metrics
-    assert "cobolcodebench/instruct/thinking/sampled/deterministic" in metrics
+    assert "coboleval/completion/non_thinking/greedy" in r.compute_metrics(cfg, results)
 
-    second = subprocess.run(cmd, cwd=ROOT, env=env, capture_output=True, text=True)
-    assert second.returncode == 0, second.stderr
-    assert "0 to go" in second.stdout
-    assert len(r.read_jsonl(out / "results.jsonl")) == len(results)
-
-
-def test_real_eval_requires_the_real_executor(tmp_path):
-    env = {**os.environ, "PYTHONPATH": str(ROOT / "src"), "EXECUTE_MODE": "stub"}
-    p = subprocess.run([sys.executable, "-m", "onprem_codegen.eval.run", "--no-wandb", "--limit", "1"],
-                       cwd=ROOT, env=env, capture_output=True, text=True)
-    assert p.returncode != 0 and "EXECUTE_MODE=real" in p.stderr
+    r.generate(cfg, tasks, tmp_path)           # resume: nothing re-requested, nothing re-executed
+    r.execute_all(cfg, tasks, gen_path, tmp_path)
+    assert len(r.read_jsonl(gen_path)) == len(gens) and len(r.read_jsonl(tmp_path / "results.jsonl")) == len(results)

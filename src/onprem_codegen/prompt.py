@@ -17,9 +17,6 @@ def instruction(io: str = IO_STDIN) -> str:
     return f"Write a complete GnuCOBOL program in fixed format. {io} Answer with a single ```cobol code block."
 
 
-INSTRUCTION = instruction()
-
-
 def build_prompt(task_text: str, io: str = IO_STDIN) -> str:
     """Raw user message, not chat-templated; the trainer / vLLM apply the model's own template."""
     task_text = task_text.strip()

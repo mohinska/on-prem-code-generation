@@ -4,18 +4,13 @@ deduplicated against Stack v1 and X-COBOL, as the codenet manifest plans.
     rows = exact_dedup([*read_manifest(a), *read_manifest(b), *read_manifest(c)])
 
 Near-dups: MinHash + LSH over kept rows; one file per cluster is kept.
-
-    python -m onprem_codegen.data.dedup   # data/raw/raw-corpus/manifest_filtered.parquet -> manifest_dedup.parquet
+Run by clean.py.
 """
-import collections
-import json
 from dataclasses import replace
-from pathlib import Path
 
-import yaml
 from datasketch import MinHash, MinHashLSH
 
-from onprem_codegen.data.schema import ManifestRow, read_manifest, write_manifest
+from onprem_codegen.data.schema import ManifestRow
 
 PRIORITY = {"stack_v1": 0, "xcobol": 1, "codenet": 2}
 
@@ -51,21 +46,3 @@ def near_dedup(rows: list[ManifestRow], contents: dict[str, str], cfg: dict) -> 
             lsh.insert(r.id, m)
             out[id(r)] = replace(r, dup_cluster_id=cluster[r.id])
     return [out[id(r)] for r in rows]
-
-
-def main() -> None:
-    raw = Path("data/raw/raw-corpus")
-    cfg = yaml.safe_load(Path("configs/data/dedup.yaml").read_text())
-    contents = {}
-    for p in raw.glob("*/corpus.jsonl"):
-        for line in open(p):
-            d = json.loads(line)
-            contents[d["id"]] = d["content"]
-    rows = exact_dedup(read_manifest(str(raw / "manifest_filtered.parquet")))  # in place; keeps order
-    rows = near_dedup(rows, contents, cfg)
-    write_manifest(rows, str(raw / "manifest_dedup.parquet"))
-    print(collections.Counter(r.filter_reason or "kept" for r in rows))
-
-
-if __name__ == "__main__":
-    main()

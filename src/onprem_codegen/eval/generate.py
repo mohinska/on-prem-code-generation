@@ -11,7 +11,6 @@ Sampling settings per mode come from data/manifests/benchmarks.yaml (evaluation_
 
 from __future__ import annotations
 
-import hashlib
 import json
 import os
 import re
@@ -117,23 +116,3 @@ class VllmClient:
                  "reasoning": c["message"].get("reasoning_content") or c["message"].get("reasoning"),
                  "finish_reason": c.get("finish_reason"),
                  "completion_tokens": tokens / len(choices) if tokens else None} for c in choices]
-
-
-class FakeClient:
-    """--dry-run: no server. Answers with the reference solution when there is one (so a dry run
-    exercises the pass path), otherwise with a stub program; every 4th sample has no code block."""
-
-    def __init__(self, tasks_by_prompt: dict[str, Task]):
-        self.tasks = tasks_by_prompt
-
-    def generate(self, messages: list[dict], sampling: dict, enable_thinking: bool) -> list[dict]:
-        task = self.tasks[messages[-1]["content"]]
-        lang = "python" if task.lang == "python" else "cobol"
-        code = task.canonical_solution or (
-            "       IDENTIFICATION DIVISION.\n       PROGRAM-ID. DRY.\n"
-            "       PROCEDURE DIVISION.\n           GOBACK.\n")
-        tag = hashlib.sha256(task.task_id.encode()).hexdigest()[:6]
-        think = f"<think>dry run {tag}</think>\n" if enable_thinking else ""
-        return [{"content": think + ("No code, sorry." if i % 4 == 3 else f"```{lang}\n{code}```"),
-                 "reasoning": None, "finish_reason": "stop", "completion_tokens": None}
-                for i in range(sampling.get("n", 1))]

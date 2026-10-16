@@ -1,4 +1,4 @@
-# Rejection sampling: task-pool -> model on A's vLLM server -> run_program -> sft-dataset (passed only).
+# Rejection sampling: task-pool -> model on A's vLLM server -> execute -> sft-dataset (passed only).
 task_pool: task-pool:latest           # W&B artifact; --task-pool PATH overrides with a local jsonl
 clean_corpus: clean-corpus:latest     # accepted CodeNet submissions (source=codenet_cobol) are added too; null = skip
 

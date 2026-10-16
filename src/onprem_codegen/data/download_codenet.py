@@ -12,13 +12,11 @@ Accepted COBOL submissions reach raw-corpus through collect:
 """
 import argparse
 import collections
-import csv
 import fnmatch
 import hashlib
 import json
 import os
 import re
-import subprocess
 import tarfile
 import time
 import urllib.request
@@ -26,6 +24,8 @@ from html.parser import HTMLParser
 from pathlib import Path
 
 import yaml
+
+from onprem_codegen.utils import git_commit
 
 CFG = Path("configs/data/codenet_cobol.yaml")
 RAW = Path("data/raw/codenet_cobol")
@@ -178,25 +178,10 @@ def build_task_pool(root: Path, cfg: dict) -> tuple[list[dict], dict]:
         tasks.append({"task_id": f"codenet/{pid}", "source": "codenet_cobol", "prompt": text,
                       "tests": tests, "meta": {"problem_id": pid}})
 
-    cobol = collections.Counter()
-    for meta in (root / "metadata").glob("p*.csv"):
-        with open(meta, newline="") as f:
-            for r in csv.DictReader(f):
-                if r["language"] == "COBOL":
-                    cobol["submissions"] += 1
-                    cobol["accepted"] += r["status"] == "Accepted"
     stats = {"problems": len(pids), "problems_with_tests": sum(1 for p in pids if (io_root / p).is_dir()),
              "tasks": len(tasks), "by_reason": dict(reasons), "tests_per_task": dict(collections.Counter(
-                 len(t["tests"]) for t in tasks)), "cobol_submissions": cobol["submissions"],
-             "cobol_accepted": cobol["accepted"]}
+                 len(t["tests"]) for t in tasks))}
     return tasks, stats
-
-
-def git_commit() -> str | None:
-    try:
-        return subprocess.check_output(["git", "rev-parse", "HEAD"], text=True).strip()
-    except (OSError, subprocess.CalledProcessError):
-        return None
 
 
 def main() -> None:

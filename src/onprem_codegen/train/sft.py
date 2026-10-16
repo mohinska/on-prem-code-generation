@@ -2,62 +2,32 @@
 
     python -m onprem_codegen.train.sft                                  # smoke, 1x 80 GB GPU
     python -m onprem_codegen.train.sft --config-name sft run_name=...   # real run on sft-dataset
-    python -m onprem_codegen.train.sft model.tiny=true run_name=...     # local dry run (CPU / MPS)
 
 Restartable: checkpoints are mirrored to W&B, so a fresh instance resumes from the last one.
 """
 
 import math
 import os
-import subprocess
-import tempfile
 from pathlib import Path
 
 import hydra
 import torch
-import transformers
 import wandb
 from datasets import load_dataset
 from omegaconf import DictConfig, OmegaConf
 from peft import LoraConfig
-from transformers import AutoConfig, AutoModelForCausalLM, AutoTokenizer, BitsAndBytesConfig, TrainerCallback
+from transformers import AutoModelForCausalLM, AutoTokenizer, BitsAndBytesConfig, TrainerCallback
 from transformers.trainer_utils import get_last_checkpoint
 from trl import SFTConfig, SFTTrainer
+
+from onprem_codegen.utils import git_commit
 
 CONFIG_DIR = str(Path(__file__).resolve().parents[3] / "configs" / "train")
 
 
-def git_commit() -> str | None:
-    try:
-        return subprocess.check_output(["git", "rev-parse", "HEAD"], text=True).strip()
-    except (OSError, subprocess.CalledProcessError):
-        return None
-
-
-def build_tiny(name: str, out_dir: str) -> str:
-    """Save a random 4-layer copy of the full multimodal architecture.
-
-    Loading it exercises the same path as the real checkpoint (text weights under
-    model.language_model.*, vision tower dropped), without downloading 54 GB.
-    """
-    cfg = AutoConfig.from_pretrained(name)
-    t = cfg.text_config
-    t.num_hidden_layers, t.layer_types = 4, t.layer_types[:4]
-    t.hidden_size, t.intermediate_size = 128, 256
-    t.num_attention_heads, t.num_key_value_heads, t.head_dim = 2, 1, 64
-    t.linear_num_key_heads, t.linear_num_value_heads = 2, 2
-    t.linear_key_head_dim, t.linear_value_head_dim = 32, 32
-    v = cfg.vision_config
-    v.depth, v.hidden_size, v.intermediate_size, v.num_heads, v.out_hidden_size = 1, 64, 128, 2, 128
-    torch.manual_seed(0)  # same random weights on every run, so resume tests are exact
-    getattr(transformers, cfg.architectures[0])._from_config(cfg).save_pretrained(out_dir)
-    AutoTokenizer.from_pretrained(name).save_pretrained(out_dir)
-    return out_dir
-
-
 def load_model(cfg: DictConfig, path: str):
-    kwargs = {"dtype": torch.float32 if cfg.model.tiny else torch.bfloat16}
-    if cfg.model.load_in_4bit and not cfg.model.tiny:
+    kwargs = {"dtype": torch.bfloat16}
+    if cfg.model.load_in_4bit:
         kwargs["quantization_config"] = BitsAndBytesConfig(
             load_in_4bit=True,
             bnb_4bit_quant_type="nf4",
@@ -130,11 +100,8 @@ def main(cfg: DictConfig) -> None:
 
     data_dir = run.use_artifact(cfg.data.artifact).download()
 
-    model_path = cfg.model.name
-    if cfg.model.tiny:
-        model_path = build_tiny(cfg.model.name, tempfile.mkdtemp(prefix="tiny-"))
-    tok = AutoTokenizer.from_pretrained(model_path)
-    model = load_model(cfg, model_path)
+    tok = AutoTokenizer.from_pretrained(cfg.model.name)
+    model = load_model(cfg, cfg.model.name)
 
     ds = load_dataset("json", data_files=str(Path(data_dir) / "sft.jsonl"), split="train")
     ds = ds.map(lambda ex: to_prompt_completion(tok, ex), remove_columns=ds.column_names)
@@ -155,7 +122,7 @@ def main(cfg: DictConfig) -> None:
         gradient_accumulation_steps=cfg.train.gradient_accumulation_steps,
         max_length=cfg.train.max_length,
         gradient_checkpointing=cfg.train.gradient_checkpointing,
-        bf16=not cfg.model.tiny,
+        bf16=True,
         report_to="wandb",
         run_name=cfg.run_name,
         seed=cfg.seed,

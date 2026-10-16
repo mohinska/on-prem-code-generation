@@ -4,14 +4,13 @@
 Licenses come from the GitHub API (SPDX id of each repo), cached in <root>/licenses.json.
 """
 import csv
-import hashlib
 import json
 import os
 import urllib.error
 import urllib.request
 from pathlib import Path
 
-from onprem_codegen.data.schema import ManifestRow
+from onprem_codegen.data.schema import ManifestRow, raw_record
 
 
 def _repo_license(repo_url: str, token: str | None) -> str | None:
@@ -43,17 +42,11 @@ def load_xcobol(cfg, root: str | Path, out_dir: str | Path) -> list[ManifestRow]
             if repo not in lic:
                 lic[repo] = _repo_license(urls[repo], token) if repo in urls else None
             text = p.read_bytes().decode("utf-8", errors="replace")
-            b = text.encode()
-            h = hashlib.sha256(b).hexdigest()
             rel = str(p.relative_to(root / "COBOL_Files"))
-            f.write(json.dumps({
-                "id": h, "source": "xcobol", "content": text, "content_sha256": h, "license": lic[repo],
-                "meta": {"repo_name": repo, "original_path": rel, "repo_license": lic[repo]},
-                "syntax_check": {"status": "skipped", "stderr": ""}}) + "\n")
+            rec, h, n = raw_record("xcobol", text, lic[repo], {"repo_name": repo, "original_path": rel, "repo_license": lic[repo]})
+            f.write(json.dumps(rec) + "\n")
             rows.append(ManifestRow(
                 id=h, source="xcobol", source_version=cfg["version"], path=rel, ext=p.suffix.lower(),
-                repo=repo, sha256=h, license=lic[repo], license_ok=lic[repo] is not None,
-                n_bytes=len(b), filter_reason=None, syntax_check="skipped", syntax_error=None,
-                exact_dup_of=None, dup_cluster_id=None, kept=True, decontam_hit=False))
+                repo=repo, sha256=h, license=lic[repo], license_ok=lic[repo] is not None, n_bytes=n))
     cache.write_text(json.dumps(lic))
     return rows

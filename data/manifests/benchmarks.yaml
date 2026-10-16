@@ -128,11 +128,10 @@ decontamination:
     - "exact match after whitespace/comment normalization"
     - "near-duplicate match (MinHash) between benchmark prompts/solutions and every training set"
     - "entry-point / function-name match against HumanEval (catches Java and COBOL ports of HumanEval)"
-  against: [stack_v1_cobol, stack_v2_java_seed, xcobol, codenet_cobol, mainframe_instruct, rejection_sampling, synthetic]
+  against: [stack_v1_cobol, xcobol, codenet_cobol, mainframe_instruct, rejection_sampling, synthetic]
   benchmarks_checked: [coboleval, cobolcodebench, humaneval_python, cobol_javatrans]
   when:
     - "clean stage: before building clean-corpus"
-    - "seed stage: on Java seeds BEFORE translation (HumanEval Java ports from MultiPL-E / HumanEval-X are likely in The Stack v2)"
     - "sft stage: on every sft-dataset version"
   fail_on_overlap: true
   reason: "COBOLEval and COBOL-JavaTrans derive from HumanEval, COBOLCodeBench from BigCodeBench; synthetic generation from those tasks would leak."

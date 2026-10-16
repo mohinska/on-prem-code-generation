@@ -33,7 +33,7 @@ named exactly as in the manifest.
 
 `.cpy` files (copybooks, not programs) stay in `clean-corpus`; SFT builders skip rows with `ext == ".cpy"`.
 
-`syntax_check` is `run_program(content, [])`'s `status` plus truncated `stderr`, filled in the clean stage; `raw-corpus` has `{"status": "skipped", "stderr": ""}`.
+`syntax_check` is `execute(content, [])`'s `status` plus truncated `stderr`, filled in the clean stage; `raw-corpus` has `{"status": "skipped", "stderr": ""}`.
 
 ### `task-pool` (C)
 
@@ -71,33 +71,28 @@ Columns: `task_id`, `benchmark`, `mode` (`thinking` / `non_thinking`), `sample_i
 
 ## 2. Executor API (A owns, B and C call)
 
-Module: `src/onprem_codegen/eval/execute.py`. A ships a stub with these exact signatures by **day 2**
-(it may compile with local `cobc` before the sandbox is ready); C codes against it from day 2.
+Module: `src/onprem_codegen/eval/execute.py`.
 
 ```python
-class Result(TypedDict):
-    status: Literal["ok", "compile_error", "runtime_error", "timeout", "test_fail"]
-    stderr: str               # compiler stderr, or program stderr of the first failing test
-    duration_s: float         # total wall time (compile + all runs)
-
 def extract_program(text: str) -> str | None:
     """First ```cobol fenced block in a model answer; None if there is none."""
 
-def run_program(source: str, tests: list[dict], timeout_s: float = 10.0) -> Result:
-    """Compile `source` with GnuCOBOL, run it once per {"input", "output"} test (stdin -> stdout).
+def execute(code: str, tests: list[dict] | str, lang: str = "cobol", timeout_s: float = 10.0) -> ExecResult:
+    """Compile `code` with GnuCOBOL, run it once per {"input", "expected"} test (stdin -> stdout).
 
-    status: compile_error = cobc failed; timeout = compile or a run exceeded timeout_s;
-    runtime_error = non-zero exit; test_fail = ran, output differs; ok = compiled and all tests passed.
+    ExecResult.status: compile_error = cobc failed; timeout = compile or a run exceeded timeout_s;
+    runtime_error = non-zero exit; wrong_output = ran, output differs; ok = compiled and all tests passed.
     The first failing step decides the status. tests=[] compiles only (ok = it compiled).
+    Other test shapes (COBOLEval caller, CobolCodeBench files, Python) are listed in the module docstring.
     """
 ```
 
 Rules:
-- Output match: compare stdout to `output` after stripping trailing whitespace on each line and trailing blank lines.
+- Output match: compare stdout to `expected` after stripping trailing whitespace on each line and trailing blank lines.
 - `tests=[]` means compile only (`cobc -fsyntax-only`, no run), so `compile_error` is distinct from `timeout`. B uses this for the syntax check.
 - Real runs go through the `eval-sandbox` container (no network, read-only, resource caps).
   `cobc` version and flags are fixed once in `data/manifests/benchmarks.yaml` and read from there.
-- COBOLEval has its own test harness. A wraps it behind the same `Result` type, so callers never see the difference.
+- COBOLEval has its own test harness. A wraps it behind the same `ExecResult` type, so callers never see the difference.
 
 ## 3. Prompt format and chat template
 

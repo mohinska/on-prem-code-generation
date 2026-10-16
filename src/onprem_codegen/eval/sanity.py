@@ -2,8 +2,7 @@
 onprem_codegen/eval/sanity.py — model-free check that the execution harness works.
 
     python -m onprem_codegen.eval.sanity --bench humaneval_python
-    python -m onprem_codegen.eval.sanity --bench cobolcodebench --mode completion
-    python -m onprem_codegen.eval.sanity --bench humaneval_python --backend local --limit 20
+    EXECUTE_BACKEND=local python -m onprem_codegen.eval.sanity --bench cobolcodebench
 
 Two controls per benchmark, no LLM involved:
     positive  the canonical solution of every task must pass, except the ones listed under
@@ -72,20 +71,10 @@ def check(tasks: list[Task], timeout_s: float, known: dict[str, dict] | None = N
 def main() -> None:
     ap = argparse.ArgumentParser(description="Harness sanity check on canonical solutions.")
     ap.add_argument("--bench", required=True, choices=["coboleval", "cobolcodebench", "humaneval_python"])
-    ap.add_argument("--mode", default=None, help="completion | instruct (default: all)")
-    ap.add_argument("--limit", type=int, default=None, help="only the first N tasks")
-    ap.add_argument("--backend", choices=["docker", "local"], default=None,
-                    help="default: $EXECUTE_BACKEND or docker. `local` is not a sandbox")
     ap.add_argument("--timeout", type=float, default=10.0)
     args = ap.parse_args()
 
-    os.environ["EXECUTE_MODE"] = "real"
-    if args.backend:
-        os.environ["EXECUTE_BACKEND"] = args.backend
-
-    tasks = load(args.bench, args.mode)
-    if args.limit:
-        tasks = tasks[: args.limit]
+    tasks = load(args.bench)
     print(f"{args.bench}: {len(tasks)} tasks, backend={os.environ.get('EXECUTE_BACKEND', 'docker')}")
     known = manifest()[args.bench].get("canonical_known_failures", {})
     sys.exit(0 if check(tasks, args.timeout, known) else 1)

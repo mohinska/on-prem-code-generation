@@ -9,7 +9,6 @@ download the artifact instead when running on a fresh instance. Syntax check not
 import argparse
 import collections
 import json
-import subprocess
 from pathlib import Path
 
 import yaml
@@ -18,6 +17,7 @@ from onprem_codegen.data.decontaminate import decontaminate
 from onprem_codegen.data.dedup import exact_dedup, near_dedup
 from onprem_codegen.data.filters import apply_filters
 from onprem_codegen.data.schema import read_manifest, write_manifest
+from onprem_codegen.utils import git_commit
 
 RAW, OUT = Path("data/raw/raw-corpus"), Path("data/raw/clean-corpus")
 
@@ -56,7 +56,7 @@ def main() -> None:
 
     if not a.no_wandb:
         import wandb
-        commit = subprocess.run(["git", "rev-parse", "HEAD"], capture_output=True, text=True).stdout.strip()
+        commit = git_commit() or ""
         with wandb.init(project="onprem-codegen", job_type="clean", name=f"clean-{commit[:7]}",
                         config={**cfg, "git_commit": commit}) as run:
             run.use_artifact("raw-corpus:latest")

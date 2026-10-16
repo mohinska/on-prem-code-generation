@@ -1,14 +1,11 @@
 # Smoke-test SFT: proves the Vast setup end to end (load, train, W&B, checkpoint, resume).
-# GPU:   python -m onprem_codegen.train.sft
-# Local: python -m onprem_codegen.train.sft model.tiny=true train.max_steps=6 train.save_steps=3
+# python -m onprem_codegen.train.sft
 
 run_name: sft-smoke
 seed: 42
 
 model:
   name: Qwen/Qwen3.8-27B
-  # Random 4-layer model with the same architecture, for local dry runs without a GPU.
-  tiny: false
   load_in_4bit: true
 
 lora:
@@ -31,7 +28,7 @@ lora:
     - down_proj
 
 data:
-  # W&B artifact with a prompt/completion JSONL; created by scripts/upload_smoke_data.py.
+  # W&B artifact with a prompt/completion JSONL; upload with `wandb artifact put` (README, Vast.ai smoke test).
   artifact: sft-smoke-data:latest
 
 train:

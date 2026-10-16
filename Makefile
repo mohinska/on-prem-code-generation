@@ -2,7 +2,7 @@
 PY ?= python
 export PYTHONPATH := src
 
-.PHONY: test codenet data sft-data sft-data-dry train train-smoke train-dry eval eval-generate eval-execute eval-dry
+.PHONY: test codenet data sft-data train train-smoke eval eval-generate eval-execute
 
 test:
 	$(PY) -m pytest -q
@@ -19,12 +19,7 @@ data: codenet
 # Rejection sampling on A's vLLM server (SSH tunnel on :8000) -> sft-dataset
 # Runs generated code in the eval-sandbox image: docker compose build eval-sandbox
 sft-data:
-	EXECUTE_MODE=real $(PY) -m onprem_codegen.data.rejection_sampling $(ARGS)
-
-# Same pipeline with canned generations and the stub executor; nothing goes to W&B
-sft-data-dry:
-	EXECUTE_MODE=stub $(PY) -m onprem_codegen.data.rejection_sampling --dry-run --no-wandb \
-		--task-pool tests/fixtures/task_pool_tiny.jsonl --out data/raw/sft-dataset-dry
+	$(PY) -m onprem_codegen.data.rejection_sampling $(ARGS)
 
 train-smoke:
 	$(PY) -m onprem_codegen.train.sft
@@ -33,13 +28,10 @@ train-smoke:
 train:
 	$(PY) -m onprem_codegen.train.sft --config-name sft $(ARGS)
 
-train-dry:
-	$(PY) -m onprem_codegen.train.sft model.tiny=true run_name=sft-smoke-local train.max_steps=6 train.save_steps=3
-
 # Eval: vLLM (SSH tunnel on :8000) -> eval-sandbox image -> W&B. configs/eval/baseline.yaml
 # Build the sandbox once: docker build -f docker/eval-sandbox.Dockerfile -t onprem-codegen/eval-sandbox .
 eval:
-	EXECUTE_MODE=real $(PY) -m onprem_codegen.eval.run $(ARGS)
+	$(PY) -m onprem_codegen.eval.run $(ARGS)
 
 # Split when generation and execution run on different machines (Vast has no Docker)
 eval-generate:
@@ -47,8 +39,4 @@ eval-generate:
 
 # make eval-execute ARGS="--generations eval-generations:baseline"
 eval-execute:
-	EXECUTE_MODE=real $(PY) -m onprem_codegen.eval.run --stage execute $(ARGS)
-
-# Canned answers and the stub executor; nothing goes to W&B
-eval-dry:
-	EXECUTE_MODE=stub $(PY) -m onprem_codegen.eval.run --dry-run --limit 3 --no-wandb --run-name dry
+	$(PY) -m onprem_codegen.eval.run --stage execute $(ARGS)

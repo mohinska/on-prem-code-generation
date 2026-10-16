@@ -6,7 +6,6 @@ import re
 import pytest
 
 from onprem_codegen.eval import benchmarks as b
-from onprem_codegen.eval.execute import CallerTest, FileIOTest
 
 
 def test_manifest_pins_every_fetchable_benchmark():
@@ -28,8 +27,9 @@ def test_normalize_coboleval():
                        {"test": "CALLER2", "result": {"value": "True", "type_": "Bool"}}]}]
     [t] = b.normalize_coboleval(rows, "completion")
     assert t.task_id == "coboleval/HumanEval/7" and t.lang == "cobol" and t.canonical_solution is None
-    assert t.tests == [CallerTest("CALLER", "[1, 2]", "List[Int]", "HAS-CLOSE-ELEMENTS.TXT"),
-                       CallerTest("CALLER2", "True", "Bool", "HAS-CLOSE-ELEMENTS.TXT")]
+    assert t.tests == [
+        {"caller": "CALLER", "expected": "[1, 2]", "type": "List[Int]", "result_file": "HAS-CLOSE-ELEMENTS.TXT"},
+        {"caller": "CALLER2", "expected": "True", "type": "Bool", "result_file": "HAS-CLOSE-ELEMENTS.TXT"}]
 
 
 def test_normalize_coboleval_rejects_non_literal_expected_value():
@@ -46,7 +46,7 @@ def test_normalize_cobolcodebench_modes():
     [c] = b.normalize_cobolcodebench([row], "completion")
     [i] = b.normalize_cobolcodebench([row], "instruct")
     assert c.prompt == "SKELETON" and i.prompt == "WRITE A PROGRAM"
-    assert c.tests == [FileIOTest({"in.ps": "a\n"}, {"out.ps": "b\n"})]
+    assert c.tests == [{"input_files": {"in.ps": "a\n"}, "expected_outputs": {"out.ps": "b\n"}}]
     assert c.canonical_solution == "FULL PROGRAM" and c.entry_point == "task_func_01"
 
 

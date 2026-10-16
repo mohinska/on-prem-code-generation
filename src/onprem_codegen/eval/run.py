@@ -2,15 +2,12 @@
 onprem_codegen/eval/run.py — eval: generate -> execute -> metrics -> W&B.
 
     # one place (laptop: SSH tunnel to vLLM on Vast, docker sandbox locally)
-    EXECUTE_MODE=real python -m onprem_codegen.eval.run --config configs/eval/baseline.yaml
+    python -m onprem_codegen.eval.run --config configs/eval/baseline.yaml
 
     # split, because Vast has no docker
     python -m onprem_codegen.eval.run --stage generate                       # on Vast: logs eval-generations
-    EXECUTE_MODE=real python -m onprem_codegen.eval.run --stage execute \\
+    python -m onprem_codegen.eval.run --stage execute \\
         --generations eval-generations:baseline                              # locally, in the sandbox
-
-    # pipeline check without GPU or W&B: canned answers, stub executor
-    python -m onprem_codegen.eval.run --dry-run --limit 3 --no-wandb
 
 Both stages append to jsonl files under <out_dir>/<run_name>/ and skip finished work, so a crashed or
 interrupted run resumes where it stopped. Generations are raw model output; the program is extracted
@@ -23,7 +20,6 @@ import argparse
 import hashlib
 import json
 import os
-import subprocess
 from collections import defaultdict
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
@@ -33,8 +29,9 @@ import yaml
 from onprem_codegen.eval import benchmarks
 from onprem_codegen.eval.benchmarks import Task
 from onprem_codegen.eval.execute import execute
-from onprem_codegen.eval.generate import FakeClient, VllmClient, messages_for, program_from_answer, split_reasoning
+from onprem_codegen.eval.generate import VllmClient, messages_for, program_from_answer, split_reasoning
 from onprem_codegen.eval.metrics import summarize
+from onprem_codegen.utils import git_commit, read_jsonl
 
 CONFIG = Path("configs/eval/baseline.yaml")
 TABLE_TEXT = 8000          # chars per text cell in the W&B Table; full text is in the artifacts
@@ -42,20 +39,6 @@ TABLE_REASONING = 2000
 
 
 # ---------- helpers ----------
-
-def read_jsonl(path: Path) -> list[dict]:
-    if not path.exists():
-        return []
-    with open(path, encoding="utf-8") as f:
-        return [json.loads(line) for line in f if line.strip()]
-
-
-def git_commit() -> str | None:
-    try:
-        return subprocess.check_output(["git", "rev-parse", "HEAD"], text=True, stderr=subprocess.DEVNULL).strip()
-    except (OSError, subprocess.CalledProcessError):
-        return None
-
 
 def protocol() -> dict:
     return yaml.safe_load(benchmarks.MANIFEST.read_text(encoding="utf-8"))["evaluation_protocol"]
@@ -91,12 +74,11 @@ def _sample(row: dict) -> tuple:
 
 # ---------- stage 1: generate ----------
 
-def generate(cfg: dict, tasks: dict, out: Path, dry_run: bool) -> Path:
+def generate(cfg: dict, tasks: dict, out: Path) -> Path:
     path = out / "generations.jsonl"
     done = {_unit(r) for r in read_jsonl(path)}
     proto = protocol()
-    client = (FakeClient({messages_for(t)[-1]["content"]: t for t in tasks.values()}) if dry_run else
-              VllmClient(cfg["server"]["base_url"], cfg["server"]["model"], cfg["server"]["request_timeout_s"]))
+    client = VllmClient(cfg["server"]["base_url"], cfg["server"]["model"], cfg["server"]["request_timeout_s"])
 
     units = []
     for (bench, tm, tid), task in tasks.items():
@@ -159,11 +141,11 @@ def execute_all(cfg: dict, tasks: dict, gen_path: Path, out: Path) -> Path:
         verdict = {"status": r.status.value, "compiled": r.compiled, "passed": r.passed,
                    "tests_passed": r.tests_passed, "tests_total": r.tests_total,
                    "stderr": r.compile_stderr or r.run_stderr, "duration_s": r.duration_s,
-                   "cobc_version": r.meta.get("cobc_version", ""), "executor": "stub" if r.meta.get("stub") else "real"}
+                   "cobc_version": r.meta.get("cobc_version", "")}
         return [{**x, **verdict} for x in rows]
 
     empty = {"status": "no_program", "compiled": False, "passed": False, "tests_passed": 0, "tests_total": 0,
-             "stderr": "", "duration_s": 0.0, "cobc_version": "", "executor": ""}
+             "stderr": "", "duration_s": 0.0, "cobc_version": ""}
     with open(path, "a", encoding="utf-8") as f, ThreadPoolExecutor(cfg["execute"]["workers"]) as pool:
         f.write("".join(json.dumps({**g, **empty}, ensure_ascii=False) + "\n" for g in no_program))
         futures = [pool.submit(run_one, rows) for rows in jobs.values()]
@@ -242,10 +224,9 @@ def log_generations(run, gen_path: Path, cfg: dict) -> None:
     run.log_artifact(art, aliases=[cfg["run_name"]])
 
 
-def run_config(cfg: dict, dry_run: bool) -> dict:
+def run_config(cfg: dict) -> dict:
     pins = {name: {"revision": b["revision"], "files": b["fetch"]["files"]} for name, b in benchmarks.manifest().items()}
-    return {**cfg, "dry_run": dry_run, "git_commit": git_commit(), "protocol": protocol(), "benchmark_pins": pins,
-            "execute_mode": os.environ.get("EXECUTE_MODE", "stub"),
+    return {**cfg, "git_commit": git_commit(), "protocol": protocol(), "benchmark_pins": pins,
             "execute_backend": os.environ.get("EXECUTE_BACKEND", "docker"),
             "vast_instance": os.environ.get("CONTAINER_ID") or os.environ.get("VAST_CONTAINERLABEL")}
 
@@ -259,17 +240,12 @@ def main() -> None:
     ap.add_argument("--generations", help="execute stage: W&B artifact (name:alias) or local generations.jsonl")
     ap.add_argument("--run-name", help="overrides run_name (and the output folder)")
     ap.add_argument("--limit", type=int, help="only the first N tasks of every benchmark / task mode")
-    ap.add_argument("--dry-run", action="store_true", help="no server: canned answers")
     ap.add_argument("--no-wandb", action="store_true")
     a = ap.parse_args()
 
     cfg = yaml.safe_load(Path(a.config).read_text(encoding="utf-8"))
     if a.run_name:
         cfg["run_name"] = a.run_name
-    if a.dry_run:
-        os.environ.setdefault("EXECUTE_MODE", "stub")
-    if a.stage != "generate" and not a.dry_run and os.environ.get("EXECUTE_MODE", "stub") != "real":
-        raise SystemExit("EXECUTE_MODE=real is required: the stub executor returns made-up statuses")
     out = Path(cfg["out_dir"]) / cfg["run_name"]
     out.mkdir(parents=True, exist_ok=True)
     tasks = load_tasks(cfg, a.limit)
@@ -280,10 +256,10 @@ def main() -> None:
         job = {"all": "eval", "generate": "eval-generate", "execute": "eval"}[a.stage]
         run = wandb.init(project=os.environ.get("WANDB_PROJECT", "onprem-codegen"), job_type=job,
                          name=cfg["run_name"] if a.stage != "generate" else f"{cfg['run_name']}-generate",
-                         config=run_config(cfg, a.dry_run))
+                         config=run_config(cfg))
 
     if a.stage in ("all", "generate"):
-        gen_path = generate(cfg, tasks, out, a.dry_run)
+        gen_path = generate(cfg, tasks, out)
         if run:
             log_generations(run, gen_path, cfg)
     if a.stage in ("all", "execute"):

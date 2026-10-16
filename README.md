@@ -7,9 +7,9 @@ The pipeline runs **data → fine-tune → evaluate → register**. It ends with
 service and a report comparing the base model with the adapted one. The project brief is in
 [docs/one-pager.pdf](docs/one-pager.pdf).
 
-> **Status:** early setup. The directory skeleton and Docker images are in place. No pipeline code
-> exists yet, and `requirements.txt` still has to be written, so the train image won't build until
-> it exists.
+> **Status:** in progress. Data collect/clean, CodeNet task pool, rejection sampling, SFT and the baseline
+> eval pipeline exist (`make data`, `sft-data`, `train`, `eval`). Preference tuning, serving and
+> registry are not written yet.
 
 ## Project structure
 
@@ -31,6 +31,7 @@ Keep this section up to date whenever you add, move or remove a top-level direct
 ├── scripts/                 # vast_onstart.sh: bootstrap a fresh Vast.ai instance
 ├── src/onprem_codegen/
 │   ├── prompt.py            # build_prompt: the one user message for SFT data and eval
+│   ├── utils.py             # git_commit, shared by all stages
 │   ├── data/                # collect, filters, dedup, decontaminate, clean (-> clean-corpus), CodeNet download
 │   │                        # (-> task-pool), rejection sampling (-> sft-dataset)
 │   ├── train/               # SFT, DPO, GRPO
@@ -53,7 +54,7 @@ Keep this section up to date whenever you add, move or remove a top-level direct
 | Preference tuning | DPO on offline pass/fail pairs. GRPO with a compile + test reward is a stretch goal on 2× 80 GB. |
 | Reference paper | [COBOL-Coder](https://arxiv.org/html/2604.03986v1) (Dau et al., 2026): compiler-guided validation and multi-stage similarity filtering for COBOL training data. Our research builds on it. |
 | Instruction data | Rejection sampling: we keep only generations that compile with GnuCOBOL and pass the tests. |
-| Data sources | The Stack v1, full not `-dedup` (COBOL subset; v1 ships file contents, v2 needs a Software Heritage download; we dedup ourselves), X-COBOL, IBM Project CodeNet (tasks with I/O tests for rejection sampling). The Stack v2 Java as optional seeds for synthetic Java→COBOL. One manifest per source in `data/manifests/`. |
+| Data sources | The Stack v1, full not `-dedup` (COBOL subset; v1 ships file contents, v2 needs a Software Heritage download; we dedup ourselves), X-COBOL, IBM Project CodeNet (tasks with I/O tests for rejection sampling). One manifest per source in `data/manifests/`. |
 | Data cleaning | Size/text filters, exact + MinHash dedup, decontamination against COBOLEval (CobolCodeBench and HumanEval planned). Files are flagged (`kept`, `filter_reason`), never deleted. Files without a license are kept. `.cpy` copybooks stay in `clean-corpus` but are excluded from SFT. |
 | Evaluation | pass@1 and pass@10 on COBOLEval in thinking and non-thinking modes, compile rate, and HumanEval-Python to catch forgetting. |
 | Tracking | Hosted W&B. Every stage reads its inputs from W&B artifacts and logs new ones. The model registry uses `candidate` → `production` aliases. |
@@ -85,12 +86,10 @@ you push our images to a registry and start the instance directly from an image.
 vastai create instance <OFFER_ID> --image pytorch/pytorch:2.11.0-cuda12.8-cudnn9-devel \
   --disk 200 --ssh --direct --onstart scripts/vast_onstart.sh
 # on the instance, once /var/log/onstart.log ends with "onstart: done":
-python -m onprem_codegen.data.upload_smoke     # once per W&B project
+mkdir -p /tmp/smoke && cp tests/fixtures/sft_smoke.jsonl /tmp/smoke/sft.jsonl
+wandb artifact put /tmp/smoke -n onprem-codegen/sft-smoke-data -t dataset   # once per W&B project
 python -m onprem_codegen.train.sft             # configs/train/sft_smoke.yaml
 ```
-
-Dry-run the same pipeline locally first with a random 4-layer model of the same architecture:
-`python -m onprem_codegen.train.sft model.tiny=true run_name=sft-smoke-local train.max_steps=6 train.save_steps=3`.
 
 ### 1. Build and push the images (once per dependency change)
 
@@ -188,7 +187,6 @@ make eval                                    # laptop: ssh -L 8000:localhost:800
 # or split:
 make eval-generate                           # on the Vast instance -> eval-generations artifact
 make eval-execute ARGS="--generations eval-generations:baseline"   # locally, in the sandbox
-make eval-dry                                # no GPU, no W&B: canned answers, stub executor
 ```
 
 ## Running locally (Docker Compose)

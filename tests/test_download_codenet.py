@@ -62,7 +62,6 @@ def test_task_pool_schema_and_filters(tmp_path):
     assert t["tests"] == [{"input": "3 5\n", "output": "8\n"}]
     assert "Print A + B." in t["prompt"]
     assert stats["by_reason"] == {"kept": 1, "has_image": 1, "no_tests": 1}
-    assert stats["cobol_submissions"] == 6 and stats["cobol_accepted"] == 3
 
 
 def test_html_keeps_english_only():

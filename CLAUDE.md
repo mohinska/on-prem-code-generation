@@ -2,8 +2,8 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
-**Status:** skeleton only. `src/onprem_codegen/*` packages are empty; `requirements.txt`, Makefile,
-Hydra configs and tests don't exist yet (the train image won't build until `requirements.txt` exists).
+**Status:** in progress. `data/`, `train/sft.py`, `eval/` and `prompt.py` exist, with `requirements.txt`, Makefile,
+configs and tests. Not written yet: DPO/GRPO, `serve/`, W&B registry step (`make register`).
 
 ## Project goal
 Domain-adapt an open code model to a low-resource / legacy programming language, fully self-hostable
@@ -33,11 +33,11 @@ W&B dashboards + model registry, base-vs-adapted evaluation report, live before/
 - SFT data uses **non-thinking mode**. Evaluate in both thinking and non-thinking modes.
 
 ## Pipeline
-1. **Collect** — The Stack v1 dedup (COBOL subset; v2 needs a separate Software Heritage download),
+1. **Collect** — The Stack v1, full not `-dedup`, we dedup ourselves (COBOL subset; v2 needs a separate Software Heritage download),
    X-COBOL (GitHub), IBM Project CodeNet → `raw-corpus`; CodeNet problems + I/O tests → `task-pool`.
    One manifest per source in `data/manifests/`.
-2. **Clean** — exact + MinHash dedup, license filter, **decontaminate against COBOLEval**
-   (NeMo Curator or datatrove) → `clean-corpus`
+2. **Clean** — exact + MinHash dedup (`datasketch`), **decontaminate against COBOLEval** (n-gram containment),
+   → `clean-corpus`. Licenses are flagged (`license_ok`) but not yet applied as a filter.
 3. **Instruction data via rejection sampling** — the model generates many solutions per `task-pool` task;
    keep only those that compile with GnuCOBOL and pass tests → `sft-dataset`
 4. **SFT** — TRL + PEFT (QLoRA) → `adapter`
@@ -87,7 +87,7 @@ docker-compose.yml       # local GPU box only; Vast instances can't run Docker
 Makefile                 # pipeline entry points
 requirements.txt
 ```
-Entry points (planned): `make data`, `make train`, `make eval`, `make register`.
+Entry points: `make data`, `make sft-data`, `make train`, `make eval` (+ `eval-generate`, `eval-execute`). `make register` is planned.
 
 ## Commands (local GPU box)
 ```bash
@@ -99,13 +99,12 @@ docker compose run --rm eval-sandbox cobc -x prog.cbl  # compile/run generated C
 On Vast.ai, see README "Running on Vast.ai" (images pushed to a registry, no compose).
 
 ## Data rules
-- Each manifest declares `role`: `train`, `tasks_and_train`, `seed` (input to synthetic generation only),
+- Each manifest declares `role`: `train`, `tasks_and_train`,
   or `eval_only`. Never train on `eval_only` sources (`benchmarks.yaml`, `mainframe_instruct.yaml`).
 - Pin `source.revision` and confirm `license.verified` at download time (currently TODOs).
 - Downloads go to `data/raw/` scratch; the real output is a W&B artifact.
 - SFT data excludes `.cpy` copybooks (`ext == ".cpy"` in the manifest); they stay in `clean-corpus` as dependencies.
-- Dataset plan and source priority (start with real COBOL; add Java→COBOL only if data size is the bottleneck):
-  [docs/dataset.md](docs/dataset.md).
+- Dataset plan and source priority (start with real COBOL): [docs/dataset.md](docs/dataset.md).
 - Execute generated code only inside the `eval-sandbox` container (no network, read-only, resource-capped).
   Vast instances have no Docker, so execution-based eval runs locally for now.
 
