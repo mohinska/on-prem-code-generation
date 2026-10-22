@@ -2,7 +2,7 @@
 PY ?= python
 export PYTHONPATH := src
 
-.PHONY: test codenet data sft-data train train-smoke eval eval-generate eval-execute
+.PHONY: test codenet data sft-data train train-smoke benchmarks eval eval-generate eval-execute
 
 test:
 	$(PY) -m pytest -q
@@ -27,6 +27,10 @@ train-smoke:
 # make train ARGS="run_name=sft-v1"
 train:
 	$(PY) -m onprem_codegen.train.sft --config-name sft $(ARGS)
+
+# Fetch + verify the pinned benchmarks, log them as benchmark-* W&B artifacts
+benchmarks:
+	$(PY) -m onprem_codegen.eval.benchmarks --wandb
 
 # Eval: vLLM (SSH tunnel on :8000) -> eval-sandbox image -> W&B. configs/eval/baseline.yaml
 # Build the sandbox once: docker build -f docker/eval-sandbox.Dockerfile -t onprem-codegen/eval-sandbox .

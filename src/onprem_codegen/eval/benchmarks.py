@@ -3,6 +3,7 @@ onprem_codegen/eval/benchmarks.py — fetch pinned benchmarks and load them as `
 
     python -m onprem_codegen.eval.benchmarks                  # fetch + verify all, print a summary
     python -m onprem_codegen.eval.benchmarks --only coboleval
+    python -m onprem_codegen.eval.benchmarks --wandb          # also log them as benchmark-* artifacts
 
 Revisions and sha256 come from data/manifests/benchmarks.yaml (the single source of truth).
 Downloaded files land in benchmarks/<name>/ (gitignored); COBOLEval is a git submodule and is
@@ -185,14 +186,49 @@ def load(name: str, mode: str | None = None) -> list[Task]:
     return tasks
 
 
+# ---------- W&B ----------
+
+def artifact(name: str):
+    """The pinned files of `name` as an unlogged W&B artifact (`wandb_artifact` in the manifest).
+    Same files -> same digest, so logging it again reuses the existing version."""
+    import wandb
+    entry = manifest()[name]
+    spec = entry["fetch"]
+    art = wandb.Artifact(entry["wandb_artifact"], type="benchmark", metadata={
+        "benchmark": name, "url": entry["url"], "revision": entry["revision"], "license": entry["license"],
+        "n_tasks": entry["n_tasks"], "role": "eval_only",
+        "files": {mode: f["sha256"] for mode, f in spec["files"].items()}})
+    for mode, path in fetch(name).items():
+        if spec["source"] == "submodule":   # LF bytes, as pinned, so a Windows checkout gives the same digest
+            with art.new_file(path.name, mode="wb") as fh:
+                fh.write(path.read_bytes().replace(b"\r\n", b"\n"))
+        else:
+            art.add_file(str(path), name=path.name)
+    return art
+
+
 def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[1])
     ap.add_argument("--only", nargs="*", help="benchmark names (default: all fetchable)")
+    ap.add_argument("--wandb", action="store_true", help="log each benchmark as its benchmark-* artifact")
     args = ap.parse_args()
-    for name in args.only or manifest():
+    names = args.only or list(manifest())
+    for name in names:
         tasks = load(name)
         modes = sorted({t.mode for t in tasks})
         print(f"ok {name}: {len(tasks)} tasks, modes={modes}, lang={tasks[0].lang}")
+    if args.wandb:
+        import os
+
+        import wandb
+
+        from onprem_codegen.utils import git_commit
+        run = wandb.init(project=os.environ.get("WANDB_PROJECT", "onprem-codegen"), job_type="benchmarks",
+                         config={"benchmarks": names, "git_commit": git_commit()})
+        for name in names:
+            run.log_artifact(artifact(name))
+            print(f"logged {manifest()[name]['wandb_artifact']}")
+        run.finish()
 
 
 if __name__ == "__main__":

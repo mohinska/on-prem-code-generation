@@ -257,6 +257,8 @@ def main() -> None:
         run = wandb.init(project=os.environ.get("WANDB_PROJECT", "onprem-codegen"), job_type=job,
                          name=cfg["run_name"] if a.stage != "generate" else f"{cfg['run_name']}-generate",
                          config=run_config(cfg))
+        for name in cfg["benchmarks"]:   # lineage: logs the version if it is new, else reuses it
+            run.use_artifact(benchmarks.artifact(name))
 
     if a.stage in ("all", "generate"):
         gen_path = generate(cfg, tasks, out)
