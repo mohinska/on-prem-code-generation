@@ -183,6 +183,7 @@ sampling per mode: `data/manifests/benchmarks.yaml`.
 
 ```bash
 docker build -f docker/eval-sandbox.Dockerfile -t onprem-codegen/eval-sandbox .   # once, locally
+make benchmarks                              # fetch + verify benchmarks, log benchmark-* artifacts (once per pin)
 make eval                                    # laptop: ssh -L 8000:localhost:8000 <vast-host> first
 # or split:
 make eval-generate                           # on the Vast instance -> eval-generations artifact

@@ -87,7 +87,7 @@ docker-compose.yml       # local GPU box only; Vast instances can't run Docker
 Makefile                 # pipeline entry points
 requirements.txt
 ```
-Entry points: `make data`, `make sft-data`, `make train`, `make eval` (+ `eval-generate`, `eval-execute`). `make register` is planned.
+Entry points: `make data`, `make sft-data`, `make train`, `make benchmarks` (log benchmark-* artifacts), `make eval` (+ `eval-generate`, `eval-execute`). `make register` is planned.
 
 ## Commands (local GPU box)
 ```bash

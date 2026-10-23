@@ -83,3 +83,15 @@ def test_known_failures_are_well_formed():
     for name, e in b.manifest().items():
         for task, v in e.get("canonical_known_failures", {}).items():
             assert v["kind"] in {"nondeterministic", "broken_reference"} and v["why"], (name, task)
+
+
+def test_artifact_names_and_files():
+    pytest.importorskip("wandb")
+    for name, e in b.manifest().items():
+        try:
+            art = b.artifact(name)
+        except (FileNotFoundError, OSError):
+            pytest.skip(f"{name} not fetched")
+        assert art.name == e["wandb_artifact"] and art.type == "benchmark"
+        assert art.metadata["revision"] == e["revision"] and art.metadata["role"] == "eval_only"
+        assert len(art.manifest.entries) == len(e["fetch"]["files"])
