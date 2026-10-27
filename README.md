@@ -1,15 +1,47 @@
 # On-Prem CodeGen
 
-This project adapts an open code model to COBOL and serves it on our own hardware, with no external
-model APIs. Every dataset, training run and evaluation is tracked in Weights & Biases.
+Domain-adapts an open code model to COBOL and serves it on our own hardware, with no external model APIs.
+Every dataset, run, sweep and eval is tracked in Weights & Biases. Project brief: [docs/one-pager.pdf](docs/one-pager.pdf).
 
-The pipeline runs **data → fine-tune → evaluate → register**. It ends with a self-hosted inference
-service and a report comparing the base model with the adapted one. The project brief is in
-[docs/one-pager.pdf](docs/one-pager.pdf).
+> **Status:** in progress. Data (collect, clean, CodeNet task pool, rejection sampling), SFT and the baseline eval exist.
+> Preference tuning, serving and the model registry are not written yet.
 
-> **Status:** in progress. Data collect/clean, CodeNet task pool, rejection sampling, SFT and the baseline
-> eval pipeline exist (`make data`, `sft-data`, `train`, `eval`). Preference tuning, serving and
-> registry are not written yet.
+## Pipeline
+
+```mermaid
+flowchart LR
+    RAW("raw-corpus<br/>Stack v1, X-COBOL, CodeNet")
+    CLEAN("clean-corpus<br/>filter, dedup, decontam")
+    SFTD("sft-dataset<br/>rejection sampling")
+    SFT("SFT<br/>QLoRA")
+    PREF("DPO / GRPO")
+    EVAL("Eval<br/>COBOLEval")
+    REG("W&B registry<br/>candidate, production")
+
+    RAW --> CLEAN --> SFTD --> SFT --> PREF --> EVAL --> REG
+    SFT --> EVAL
+
+    classDef step fill:#F7F7F7,color:#000,stroke-width:0
+    class RAW,CLEAN,SFTD,SFT,PREF,EVAL,REG step
+```
+
+Each stage reads its inputs from W&B artifacts and logs new versions, so lineage from raw corpus to deployed model is automatic.
+
+## Key decisions
+
+| Area | Decision |
+|---|---|
+| Language, benchmark | **COBOL**; COBOLEval executed with GnuCOBOL. pass@1/pass@10, compile rate, HumanEval-Python for forgetting. |
+| Base model | **`Qwen/Qwen3.8-27B`** (dense, Apache 2.0). Text part only; vision encoder frozen. |
+| Fine-tuning | QLoRA (4-bit) on 1× 80 GB. SFT in non-thinking mode; eval in both modes. |
+| Preference tuning | DPO on offline pass/fail pairs. GRPO (compile + test reward) is a stretch goal on 2× 80 GB. |
+| Data | Stack v1 (full, we dedup), X-COBOL, CodeNet. Files are flagged (`kept`, `filter_reason`), never deleted. `.cpy` copybooks are excluded from SFT. |
+| Instruction data | Rejection sampling: keep only generations that compile and pass the tests. |
+| Reference | [COBOL-Coder](https://arxiv.org/html/2604.03986v1) (Dau et al.): compiler-guided validation and similarity filtering. |
+| Tracking | Hosted W&B (run metadata leaves premises; data is public). |
+| Compute | Vast.ai, 1× 80 GB by default, 2× 80 GB for GRPO and final runs. Ephemeral instances. |
+| Serving | vLLM, OpenAI-compatible, over an SSH tunnel. OpenCode is the demo client. |
+| Stack | TRL + PEFT, Hydra configs per stage, pinned `requirements.txt`. |
 
 ## Project structure
 
@@ -17,187 +49,92 @@ Keep this section up to date whenever you add, move or remove a top-level direct
 
 ```
 .
-├── benchmarks/              # eval benchmarks as git submodules / pinned clones (never trained on)
-├── configs/                 # configs per stage (data/ and eval/ read with yaml, train/ with Hydra)
-├── data/                    # local scratch, gitignored except manifests/
-│   └── manifests/           # one YAML per source: URL, revision, license, checksums, W&B artifact
-├── docker/
-│   ├── train.Dockerfile     # training + data pipeline (TRL, PEFT, CUDA kernels)
-│   ├── serve.Dockerfile     # vLLM OpenAI-compatible server
-│   ├── serve-entrypoint.sh  # serves the base model plus the LoRA adapter if it's present
-│   └── eval-sandbox.Dockerfile  # GnuCOBOL; runs untrusted generated code
-├── docs/                    # project brief, setup notes
-├── reports/                 # evaluation report, figures
-├── scripts/                 # vast_onstart.sh: bootstrap a fresh Vast.ai instance
+├── benchmarks/              # pinned benchmark clones (never trained on)
+├── configs/                 # per stage: data/ and eval/ (yaml), train/ (Hydra)
+├── data/                    # local scratch, gitignored except manifests/ (one YAML per source)
+├── docker/                  # train, serve, eval-sandbox images
+├── docs/                    # project brief, dataset plan, contracts
+├── reports/                 # project-log.md, evaluation report
+├── scripts/                 # vast_onstart.sh: bootstrap a Vast.ai instance
 ├── src/onprem_codegen/
-│   ├── prompt.py            # build_prompt: the one user message for SFT data and eval
-│   ├── utils.py             # git_commit, shared by all stages
-│   ├── data/                # collect, filters, dedup, decontaminate, clean (-> clean-corpus), CodeNet download
-│   │                        # (-> task-pool), rejection sampling (-> sft-dataset)
-│   ├── train/               # SFT, DPO, GRPO
-│   ├── eval/                # sandboxed execute(), benchmark loader, generate -> execute -> metrics -> W&B (run.py)
-│   └── serve/               # adapter export and merge, demo client helpers
+│   ├── prompt.py            # build_prompt, shared by SFT data and eval
+│   ├── utils.py
+│   ├── data/                # collect, filters, dedup, decontaminate, clean, CodeNet, rejection sampling
+│   ├── train/               # SFT (DPO, GRPO planned)
+│   ├── eval/                # sandboxed execute(), benchmark loader, generate -> execute -> metrics -> W&B
+│   └── serve/               # adapter export, demo client helpers (planned)
 ├── tests/
-├── docker-compose.yml       # local / on-prem GPU box (not for Vast.ai, see below)
-├── Makefile                 # entry points: make test / codenet / data / sft-data / train / eval
-├── .env.example             # required environment variables
-└── CLAUDE.md                # working notes for Claude Code
+├── tasks/                   # plan and todo
+├── docker-compose.yml       # local GPU box only
+├── Makefile                 # entry points
+└── .env.example
 ```
 
-## Key decisions
-
-| Area | Decision |
-|---|---|
-| Target language | **COBOL**. Benchmark: COBOLEval, executed with GnuCOBOL. |
-| Base model | **`Qwen/Qwen3.8-27B`**: dense 27B, hybrid Gated DeltaNet + Gated Attention, Apache 2.0. We fine-tune the text part only and leave the vision encoder frozen. |
-| Fine-tuning | QLoRA (4-bit) on 1× 80 GB by default. bf16 LoRA only on 2× 80 GB. SFT data is in non-thinking mode. |
-| Preference tuning | DPO on offline pass/fail pairs. GRPO with a compile + test reward is a stretch goal on 2× 80 GB. |
-| Reference paper | [COBOL-Coder](https://arxiv.org/html/2604.03986v1) (Dau et al., 2026): compiler-guided validation and multi-stage similarity filtering for COBOL training data. Our research builds on it. |
-| Instruction data | Rejection sampling: we keep only generations that compile with GnuCOBOL and pass the tests. |
-| Data sources | The Stack v1, full not `-dedup` (COBOL subset; v1 ships file contents, v2 needs a Software Heritage download; we dedup ourselves), X-COBOL, IBM Project CodeNet (tasks with I/O tests for rejection sampling). One manifest per source in `data/manifests/`. |
-| Data cleaning | Size/text filters, exact + MinHash dedup, decontamination against COBOLEval (CobolCodeBench and HumanEval planned). Files are flagged (`kept`, `filter_reason`), never deleted. Files without a license are kept. `.cpy` copybooks stay in `clean-corpus` but are excluded from SFT. |
-| Evaluation | pass@1 and pass@10 on COBOLEval in thinking and non-thinking modes, compile rate, and HumanEval-Python to catch forgetting. |
-| Tracking | Hosted W&B. Every stage reads its inputs from W&B artifacts and logs new ones. The model registry uses `candidate` → `production` aliases. |
-| Compute | Vast.ai team account. 1× 80 GB by default, 2× 80 GB only for GRPO and final runs. Instances are ephemeral. |
-| Serving | vLLM with an OpenAI-compatible API, reached through an SSH tunnel only. OpenCode is the demo client. |
-| Config / deps | Hydra configs per stage; pinned `requirements.txt` (pip). |
-
-Known limitation: W&B is hosted, so run metadata leaves our machines. The datasets are public.
-
-## Cloning
-
-Benchmarks are git submodules (`benchmarks/coboleval`), so clone with submodules:
+## Setup
 
 ```bash
-git clone --recurse-submodules <repo-url>
-# already cloned without them:
-git submodule update --init
+git clone <repo-url> && cd on-prem-code-generation
+pip install -r requirements.txt
+cp .env.example .env        # WANDB_*, HF_TOKEN, VLLM_VERSION
+make test
 ```
+
+| Command | What it does |
+|---|---|
+| `make codenet` | CodeNet COBOL parts and `task-pool` artifact |
+| `make data` | `raw-corpus` then `clean-corpus` |
+| `make sft-data` | rejection sampling against the vLLM server, then `sft-dataset` |
+| `make train` | SFT (`make train-smoke` for a smoke run) |
+| `make benchmarks` | fetch pinned benchmarks, log `benchmark-*` artifacts |
+| `make eval` | generate, execute, metrics (also `eval-generate`, `eval-execute`) |
 
 ## Running on Vast.ai
 
-Vast.ai instances are already Docker containers, so `docker compose` doesn't work on them. Instead,
-you push our images to a registry and start the instance directly from an image.
-
-**Without a custom image** (smoke tests): start from the stock PyTorch image and let
-`scripts/vast_onstart.sh` clone the repo, install `requirements.txt` and download the model:
-
-```bash
-vastai create instance <OFFER_ID> --image pytorch/pytorch:2.11.0-cuda12.8-cudnn9-devel \
-  --disk 200 --ssh --direct --onstart scripts/vast_onstart.sh
-# on the instance, once /var/log/onstart.log ends with "onstart: done":
-mkdir -p /tmp/smoke && cp tests/fixtures/sft_smoke.jsonl /tmp/smoke/sft.jsonl
-wandb artifact put /tmp/smoke -n onprem-codegen/sft-smoke-data -t dataset   # once per W&B project
-python -m onprem_codegen.train.sft             # configs/train/sft_smoke.yaml
-```
-
-### 1. Build and push the images (once per dependency change)
-
-Build on a Linux x86 machine if you can. On an Apple Silicon Mac, `--platform linux/amd64` works
-but compiling the CUDA kernels under emulation is very slow.
+Instances are containers, so there is no `docker compose`. Rules: ≥ 200 GB disk, datacenter hosts, secrets
+(`WANDB_API_KEY`, `WANDB_ENTITY`, `WANDB_PROJECT`, `HF_TOKEN`, `GITHUB_TOKEN`) set once under
+**Account → Environment Variables**, never baked into images. Every stage must restart on a fresh instance
+(inputs and outputs in W&B, checkpoints with resume). Destroy the instance when done.
 
 ```bash
-REG=ghcr.io/<org>          # or docker.io/<user>
-TAG=$(git rev-parse --short HEAD)
+# build and push images (Linux x86 recommended)
+docker buildx build --platform linux/amd64 -f docker/train.Dockerfile -t $REG/onprem-codegen-train:$TAG --push .
 
-docker buildx build --platform linux/amd64 -f docker/train.Dockerfile \
-  -t $REG/onprem-codegen-train:$TAG --push .
-docker buildx build --platform linux/amd64 -f docker/serve.Dockerfile \
-  --build-arg VLLM_VERSION=<version> -t $REG/onprem-codegen-serve:$TAG --push .
-```
-
-### 2. Set secrets once
-
-In the Vast.ai console, open **Account → Environment Variables** and add `WANDB_API_KEY`,
-`WANDB_ENTITY`, `WANDB_PROJECT`, `HF_TOKEN` and `GITHUB_TOKEN` (read-only, for cloning). They're injected into every instance. Don't bake
-them into images or pass them on the command line.
-
-### 3. Rent an instance
-
-```bash
-pip install vastai
-vastai set api-key <VAST_API_KEY>
-
-# 1× 80 GB, ≥200 GB disk, datacenter hosts, cheapest first
+# rent, connect, run
 vastai search offers 'num_gpus=1 gpu_ram>=80 disk_space>=200 datacenter=true reliability>0.98' -o 'dph'
-
-vastai create instance <OFFER_ID> \
-  --image $REG/onprem-codegen-train:$TAG \
-  --disk 200 --ssh --direct
-# private registry: add  --login '-u <user> -p <token> ghcr.io'
-
-vastai ssh-url <INSTANCE_ID>
-```
-
-For GRPO or final runs, use `num_gpus=2` instead.
-
-### 4. Run a stage
-
-```bash
+vastai create instance <OFFER_ID> --image $REG/onprem-codegen-train:$TAG --disk 200 --ssh --direct
 ssh -p <PORT> root@<HOST>
-cd /workspace && git clone <repo-url> && cd on-prem-code-generation   # path the image expects
-tmux new -s run          # so the run survives SSH disconnects
+cd /workspace && git clone <repo-url> && cd on-prem-code-generation
+tmux new -s run
 python -m onprem_codegen.train.sft ...
-```
 
-Every stage must be restartable on a fresh instance:
-- Inputs come from W&B artifacts and outputs go back to W&B.
-- Checkpoints are saved regularly, and runs resume from the latest one.
-- Don't leave anything important only on the instance disk.
-
-### 5. Serve the model
-
-Start the instance from the `onprem-codegen-serve` image instead. With `--ssh`, Vast replaces the
-image entrypoint, so you start the server yourself:
-
-```bash
-# on the instance: fetch the adapter, then start vLLM
-pip install wandb
-wandb artifact get <entity>/<project>/adapter:production --root /adapters/cobol
-tmux new -s serve 'serve-entrypoint.sh'
-
-# on your laptop: tunnel the API (no public port)
-ssh -p <PORT> root@<HOST> -N -L 8000:localhost:8000
-curl localhost:8000/v1/models     # lists "base" and "cobol"
-```
-
-### 6. Destroy the instance when you're done
-
-```bash
 vastai destroy instance <INSTANCE_ID>
 ```
 
-### Eval sandbox caveat
+Smoke test without a custom image: start from `pytorch/pytorch:2.11.0-cuda12.8-cudnn9-devel` with
+`--onstart scripts/vast_onstart.sh`.
 
-The `eval-sandbox` image uses `--network none`, a read-only filesystem and resource limits to
-isolate generated code. Those settings only apply under Docker, via `docker-compose.yml`. On a
-Vast instance there is no Docker, so the isolation isn't there. Until we decide how to handle
-this, run execution-based eval (compiling and testing generated COBOL) locally, or on a machine
-where the sandbox runs under Docker.
+**Serving:** start from the `onprem-codegen-serve` image, fetch the adapter
+(`wandb artifact get <entity>/<project>/adapter:production --root /adapters/cobol`), run `serve-entrypoint.sh`,
+then tunnel with `ssh -p <PORT> root@<HOST> -N -L 8000:localhost:8000`. `localhost:8000/v1/models` lists `base` and `cobol`.
 
-### Eval (baseline or adapted model)
+## Eval
 
-Generation needs only the vLLM server; execution needs the eval-sandbox image. `eval.run` does both,
-or one stage at a time when they run on different machines. Settings: `configs/eval/baseline.yaml`;
-sampling per mode: `data/manifests/benchmarks.yaml`.
+Generation needs only the vLLM server (over the tunnel); execution needs the `eval-sandbox` image
+(no network, read-only, resource-capped). Vast has no Docker, so execution runs locally.
+Settings: `configs/eval/baseline.yaml`, sampling per mode in `data/manifests/benchmarks.yaml`.
 
 ```bash
-docker build -f docker/eval-sandbox.Dockerfile -t onprem-codegen/eval-sandbox .   # once, locally
-make benchmarks                              # fetch + verify benchmarks, log benchmark-* artifacts (once per pin)
-make eval                                    # laptop: ssh -L 8000:localhost:8000 <vast-host> first
-# or split:
-make eval-generate                           # on the Vast instance -> eval-generations artifact
-make eval-execute ARGS="--generations eval-generations:baseline"   # locally, in the sandbox
+docker build -f docker/eval-sandbox.Dockerfile -t onprem-codegen/eval-sandbox .   # once
+make benchmarks
+make eval-generate                                                  # on the Vast instance
+make eval-execute ARGS="--generations eval-generations:baseline"    # locally, in the sandbox
 ```
 
-## Running locally (Docker Compose)
-
-For a machine with an NVIDIA GPU and the NVIDIA Container Toolkit:
+## Local GPU box
 
 ```bash
-cp .env.example .env        # fill in keys and VLLM_VERSION
 docker compose build
-docker compose run --rm train bash
-docker compose up serve     # API on 127.0.0.1:8000
+docker compose run --rm train python -m onprem_codegen.train.sft ...
+docker compose up serve                                  # 127.0.0.1:8000
 docker compose run --rm eval-sandbox cobc -x prog.cbl
 ```

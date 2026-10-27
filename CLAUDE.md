@@ -78,7 +78,7 @@ configs/                 # Hydra configs per stage
 data/manifests/          # committed source manifests; rest of data/ is gitignored scratch
 docker/                  # train, serve, eval-sandbox images
 docs/                    # project brief, setup notes
-reports/                 # evaluation report
+reports/                 # project-log.md (running log), evaluation report
 scripts/                 # Vast.ai instance bootstrap
 src/onprem_codegen/      # data/ train/ eval/ serve/ — run as `python -m onprem_codegen.<stage>...`
                          # prompt.py: build_prompt, shared by SFT data and eval
@@ -111,6 +111,14 @@ On Vast.ai, see README "Running on Vast.ai" (images pushed to a registry, no com
 **Keep README.md in sync:** whenever you add, move or remove a top-level directory or module,
 update the "Project structure" section of README.md (and this layout) in the same change.
 The same goes for "Key decisions" when a decision above changes.
+
+## Project log
+- Everything we do is documented in [reports/project-log.md](reports/project-log.md): decisions, code changes, runs,
+  sweeps, evals, problems and **every result with exact numbers**. It is the source for the intermediate report,
+  the final report and the paper.
+- The log describes the project as it is now; new runs and results are added as entries under "Results" (what was run,
+  config, exact numbers, W&B run/artifact link, commit hash). No dates in titles, and no "removed/dropped X" entries:
+  update the description instead. Failed runs and negative results go in too.
 
 ## Commit messages
 - One line: `type(scope): message` (e.g. `feat(data): add MinHash dedup`). No body, no Co-Authored-By trailer.
