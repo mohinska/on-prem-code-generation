@@ -19,7 +19,7 @@ license:
     - "Use must follow each file's original license, including attribution where required."
     - "Re-download periodically to honor data-removal (opt-out) requests."
     - "Do not redistribute the data in this repo; share only this manifest."
-  verified: false               # TODO: confirm terms text at download time
+  verified: true
 
 download:
   method: datasets.load_dataset

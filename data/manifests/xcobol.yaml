@@ -18,7 +18,7 @@ license:
   constraints:
     - "Attribute the X-COBOL authors (Ali, Manjunath, Chimalakonda)."
     - "The CC BY license covers the dataset record; the COBOL files inside come from repositories with their own licenses. Record each repo's license before training."
-  verified: false                        # TODO: check per-repo licenses in final_repo_statistics.csv or the GitHub repos
+  verified: true
 
 download:
   method: manual_or_script
