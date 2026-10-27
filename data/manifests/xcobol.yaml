@@ -31,11 +31,14 @@ download:
     - name: final_repo_statistics.csv
       md5: cf14c767f49543f7d4701a38708cee98
   target_dir: data/raw/xcobol/    # scratch only; the output lives in W&B
-  date_downloaded: null                  # TODO
+  date_downloaded: 2026-10-11            # from file mtimes of the raw-corpus export
 
 integrity:
   checksum_algorithm: md5                # as published by Zenodo
   verify_on_download: true
+  num_files: 5195                        # raw-corpus:v0, source=xcobol (matches the v2 record)
+  size_bytes: 488843976                  # sum of file bytes (manifest n_bytes)
+  sha256_of_export: cf7bd6e08336171b59b071ff981b2b6870e98abbef1c2f501c5598ec1e4de863   # raw-corpus/xcobol/corpus.jsonl
 
 outputs:
   - wandb_artifact: raw-corpus        # source=xcobol
