@@ -7,6 +7,7 @@ import pytest
 import yaml
 
 from onprem_codegen.data import clean
+from onprem_codegen.eval.execute import ExecResult, Status
 from onprem_codegen.data.decontaminate import decontaminate
 from onprem_codegen.data.dedup import exact_dedup, near_dedup
 from onprem_codegen.data.filters import apply_filters
@@ -115,6 +116,34 @@ def test_decontaminate_ignores_comment_only_differences(tmp_path):
     assert out.decontam_hit
 
 
+# --- syntax check
+
+def _fake_execute(code, tests, **kw):
+    """Stands in for the sandboxed cobc: programs containing BROKEN fail to compile."""
+    if "BROKEN" in code:
+        return ExecResult(Status.COMPILE_ERROR, compiled=False, passed=False, compile_stderr="e" * 600)
+    return ExecResult(Status.OK, compiled=True, passed=True)
+
+
+def test_syntax_check_tags_kept_files_and_leaves_the_rest(monkeypatch):
+    monkeypatch.setattr(clean, "execute", _fake_execute)
+    good, bad = _prog("GOOD"), _prog("BROKEN")
+    cpy = _row(_prog("CPY"), path="c.cpy")
+    cpy.ext = ".cpy"
+    dropped = _row(_prog("DROP"), path="d.cbl")
+    dropped.kept, dropped.filter_reason = False, "exact_dup"
+    rows = [_row(good, path="g"), _row(bad, path="b"), cpy, dropped]
+    records = {r.id: {"syntax_check": {"status": "skipped", "stderr": ""}} for r in rows}
+    contents = {r.id: c for r, c in zip(rows, [good, bad, _prog("CPY"), _prog("DROP")])}
+    r = _by_path(clean.syntax_check(rows, contents, records))
+    assert (r["g"].syntax_check, r["g"].syntax_error) == ("ok", None)
+    assert r["b"].syntax_check == "compile_error" and len(r["b"].syntax_error) == 500
+    assert r["b"].kept  # tag, don't drop
+    assert r["c.cpy"].syntax_check == "skipped" and r["d.cbl"].syntax_check == "skipped"
+    assert records[r["b"].id]["syntax_check"] == {"status": "compile_error", "stderr": "e" * 500}
+    assert records[r["g"].id]["syntax_check"]["status"] == "ok"
+
+
 # --- clean.main end to end
 
 def test_clean_main_filters_dedups_decontaminates_and_never_deletes(tmp_path, monkeypatch):
@@ -144,6 +173,7 @@ def test_clean_main_filters_dedups_decontaminates_and_never_deletes(tmp_path, mo
     write_manifest(rows, str(raw / "manifest.parquet"))
 
     out = tmp_path / "out"
+    monkeypatch.setattr(clean, "execute", _fake_execute)
     monkeypatch.chdir(tmp_path)
     monkeypatch.setattr(clean, "RAW", raw)
     monkeypatch.setattr(clean, "OUT", out)
@@ -156,6 +186,9 @@ def test_clean_main_filters_dedups_decontaminates_and_never_deletes(tmp_path, mo
         "good": None, "dup": "exact_dup", "short": "too_short", "leak": "decontam"}
     kept = [json.loads(l) for l in open(out / "corpus.jsonl")]
     assert [d["content"] for d in kept] == [files["good"][1]]
+    assert kept[0]["syntax_check"]["status"] == "ok" and result["good"].syntax_check == "ok"
+    assert result["short"].syntax_check == "skipped"  # only kept files are checked
     stats = json.loads((out / "stats.json").read_text())
     assert stats["files_in"] == 4 and stats["files_kept"] == 1
+    assert stats["by_syntax_check"] == {"ok": 1}
     assert stats["by_reason"] == {"kept": 1, "exact_dup": 1, "too_short": 1, "decontam": 1}
