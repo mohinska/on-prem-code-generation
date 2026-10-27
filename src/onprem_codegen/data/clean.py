@@ -80,7 +80,7 @@ def main() -> None:
     stats = {"files_in": len(rows), "files_kept": len(kept), "bytes_kept": sum(r.n_bytes for r in kept),
              "by_reason": dict(collections.Counter(r.filter_reason or "kept" for r in rows))}
     stats["by_syntax_check"] = dict(collections.Counter(r.syntax_check for r in kept))
-    for key in ("source", "ext", "license"):
+    for key in ("source", "ext", "license", "license_ok"):
         stats[f"kept_by_{key}"] = dict(collections.Counter(str(getattr(r, key)) for r in kept).most_common())
     (OUT / "stats.json").write_text(json.dumps(stats, indent=1))
     print(json.dumps(stats, indent=1))

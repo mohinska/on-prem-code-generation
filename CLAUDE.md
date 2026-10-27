@@ -37,7 +37,7 @@ W&B dashboards + model registry, base-vs-adapted evaluation report, live before/
    X-COBOL (GitHub), IBM Project CodeNet → `raw-corpus`; CodeNet problems + I/O tests → `task-pool`.
    One manifest per source in `data/manifests/`.
 2. **Clean** — exact + MinHash dedup (`datasketch`), **decontaminate against COBOLEval** (n-gram containment),
-   → `clean-corpus`. Licenses are flagged (`license_ok`) but not yet applied as a filter.
+   → `clean-corpus`. Licenses are only tagged (`license_ok`), by decision not used as a filter.
 3. **Instruction data via rejection sampling** — the model generates many solutions per `task-pool` task;
    keep only those that compile with GnuCOBOL and pass tests → `sft-dataset`
 4. **SFT** — TRL + PEFT (QLoRA) → `adapter`

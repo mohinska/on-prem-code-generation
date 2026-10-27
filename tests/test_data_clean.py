@@ -192,6 +192,7 @@ def test_clean_main_filters_dedups_decontaminates_and_never_deletes(tmp_path, mo
     stats = json.loads((out / "stats.json").read_text())
     assert stats["files_in"] == 4 and stats["files_kept"] == 1
     assert stats["by_syntax_check"] == {"ok": 1}
+    assert stats["kept_by_license_ok"] == {"True": 1}  # license is a tag, not a filter
     assert stats["by_reason"] == {"kept": 1, "exact_dup": 1, "too_short": 1, "decontam": 1}
 
 
