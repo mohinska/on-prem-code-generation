@@ -7,6 +7,7 @@ import pytest
 import yaml
 
 from onprem_codegen.data import clean
+from onprem_codegen import utils
 from onprem_codegen.eval.execute import ExecResult, Status
 from onprem_codegen.data.decontaminate import decontaminate
 from onprem_codegen.data.dedup import exact_dedup, near_dedup
@@ -192,3 +193,40 @@ def test_clean_main_filters_dedups_decontaminates_and_never_deletes(tmp_path, mo
     assert stats["files_in"] == 4 and stats["files_kept"] == 1
     assert stats["by_syntax_check"] == {"ok": 1}
     assert stats["by_reason"] == {"kept": 1, "exact_dup": 1, "too_short": 1, "decontam": 1}
+
+
+# --- W&B wiring
+
+class _FakeRun:
+    def __init__(self):
+        self.used = []
+
+    def use_artifact(self, name):
+        self.used.append(name)
+        return self
+
+    def download(self, root):
+        Path(root).mkdir(parents=True, exist_ok=True)
+        (Path(root) / "manifest.parquet").write_text("downloaded")
+
+
+def test_init_run_reads_project_and_vast_instance_from_env(monkeypatch):
+    calls = {}
+    fake = type(sys)("wandb")
+    fake.init = lambda **kw: calls.update(kw) or "run"
+    monkeypatch.setitem(sys.modules, "wandb", fake)
+    monkeypatch.setenv("WANDB_PROJECT", "proj")
+    monkeypatch.setenv("CONTAINER_ID", "123")
+    assert utils.init_run("clean", "n", {"a": 1}) == "run"
+    assert calls["project"] == "proj" and calls["job_type"] == "clean"
+    assert calls["config"]["a"] == 1 and calls["config"]["vast_instance"] == "123" and "git_commit" in calls["config"]
+
+
+def test_ensure_raw_downloads_only_when_missing(tmp_path):
+    run = _FakeRun()
+    clean.ensure_raw(run, tmp_path / "raw")
+    assert (tmp_path / "raw/manifest.parquet").read_text() == "downloaded"
+    (tmp_path / "raw/manifest.parquet").write_text("local")
+    clean.ensure_raw(run, tmp_path / "raw")
+    assert (tmp_path / "raw/manifest.parquet").read_text() == "local"
+    assert run.used == ["raw-corpus:latest"] * 2  # lineage is recorded either way

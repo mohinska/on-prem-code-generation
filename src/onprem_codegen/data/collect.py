@@ -16,7 +16,7 @@ from onprem_codegen.data.codenet import load_codenet
 from onprem_codegen.data.schema import write_manifest
 from onprem_codegen.data.stack_v1 import load_stack_v1
 from onprem_codegen.data.xcobol import load_xcobol
-from onprem_codegen.utils import git_commit
+from onprem_codegen.utils import git_commit, init_run
 
 CFG = Path("configs/data")
 OUT = Path("data/raw/raw-corpus")
@@ -45,8 +45,7 @@ def main() -> None:
 
     if not a.no_wandb:
         import wandb
-        commit = git_commit() or ""
-        with wandb.init(project="onprem-codegen", job_type="collect", name=f"collect-{commit[:7]}", config={**cfg, "git_commit": commit}) as run:
+        with init_run("collect", f"collect-{(git_commit() or '')[:7]}", cfg) as run:
             run.summary.update({k: v for k, v in stats.items() if not isinstance(v, dict)})
             art = wandb.Artifact("raw-corpus", type="dataset", metadata=stats)
             art.add_dir(str(OUT))
