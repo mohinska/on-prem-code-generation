@@ -6,9 +6,8 @@ onprem_codegen/eval/benchmarks.py — fetch pinned benchmarks and load them as `
     python -m onprem_codegen.eval.benchmarks --wandb          # also log them as benchmark-* artifacts
 
 Revisions and sha256 come from data/manifests/benchmarks.yaml (the single source of truth).
-Downloaded files land in benchmarks/<name>/ (gitignored); COBOLEval is a git submodule and is
-read in place (git submodule update --init benchmarks/coboleval). A hash mismatch is a hard
-error. These are eval_only sources: nothing here may feed a training set.
+Downloaded files land in benchmarks/<name>/ (gitignored). A hash mismatch is a hard error.
+These are eval_only sources: nothing here may feed a training set.
 
     from onprem_codegen.eval.benchmarks import load
     for task in load("humaneval_python"):
@@ -63,34 +62,24 @@ def manifest() -> dict[str, dict]:
     return {b["name"]: b for b in doc["benchmarks"] if b.get("fetch")}
 
 
-def _sha256(path: Path, normalize_eol: bool = False) -> str:
-    data = path.read_bytes()
-    if normalize_eol:   # a Windows checkout with autocrlf rewrites line endings of jsonl files
-        data = data.replace(b"\r\n", b"\n")
-    return hashlib.sha256(data).hexdigest()
+def _sha256(path: Path) -> str:
+    return hashlib.sha256(path.read_bytes()).hexdigest()
 
 
-def local_path(name: str, f: dict, source: str) -> Path:
+def local_path(name: str, f: dict) -> Path:
     """Where the file of a manifest `files` entry lives on disk."""
-    rel = Path(f["path"]) if source == "submodule" else Path(f["path"]).name
-    return BENCH_DIR / name / rel
+    return BENCH_DIR / name / Path(f["path"]).name
 
 
 def fetch(name: str) -> dict[str, Path]:
-    """Makes the pinned files of `name` available (download, or read the submodule) and verifies
-    sha256. Returns {mode: local path}."""
+    """Downloads the pinned files of `name` (unless already there) and verifies sha256.
+    Returns {mode: local path}."""
     entry = manifest()[name]
     spec = entry["fetch"]
     out: dict[str, Path] = {}
     for mode, f in spec["files"].items():
-        dest = local_path(name, f, spec["source"])
-        if spec["source"] == "submodule":
-            if not dest.is_file():
-                raise FileNotFoundError(f"{dest} is missing: run `git submodule update --init benchmarks/{name}`")
-            if _sha256(dest, normalize_eol=True) != f["sha256"]:
-                raise ValueError(f"{name}/{mode}: {dest} does not match the pinned sha256 {f['sha256']}; "
-                                 f"is the submodule at revision {entry['revision']}?")
-        elif not dest.is_file() or _sha256(dest) != f["sha256"]:
+        dest = local_path(name, f)
+        if not dest.is_file() or _sha256(dest) != f["sha256"]:
             url = URL_TEMPLATES[spec["source"]].format(repo=spec["repo"], revision=entry["revision"], path=f["path"])
             dest.parent.mkdir(parents=True, exist_ok=True)
             req = urllib.request.Request(url, headers={"User-Agent": "onprem-codegen"})
@@ -193,17 +182,12 @@ def artifact(name: str):
     Same files -> same digest, so logging it again reuses the existing version."""
     import wandb
     entry = manifest()[name]
-    spec = entry["fetch"]
     art = wandb.Artifact(entry["wandb_artifact"], type="benchmark", metadata={
         "benchmark": name, "url": entry["url"], "revision": entry["revision"], "license": entry["license"],
         "n_tasks": entry["n_tasks"], "role": "eval_only",
-        "files": {mode: f["sha256"] for mode, f in spec["files"].items()}})
-    for mode, path in fetch(name).items():
-        if spec["source"] == "submodule":   # LF bytes, as pinned, so a Windows checkout gives the same digest
-            with art.new_file(path.name, mode="wb") as fh:
-                fh.write(path.read_bytes().replace(b"\r\n", b"\n"))
-        else:
-            art.add_file(str(path), name=path.name)
+        "files": {mode: f["sha256"] for mode, f in entry["fetch"]["files"].items()}})
+    for path in fetch(name).values():
+        art.add_file(str(path), name=path.name)
     return art
 
 

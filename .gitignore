@@ -25,10 +25,9 @@ multirun/
 data/*
 !data/manifests/
 
-# Benchmarks are git submodules / pinned clones; ignore anything else dropped there
+# Benchmarks are downloaded at pinned commits (python -m onprem_codegen.eval.benchmarks)
 benchmarks/*
 !benchmarks/.gitkeep
-!benchmarks/coboleval
 
 # Model weights and large data
 *.safetensors

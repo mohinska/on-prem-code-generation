@@ -73,7 +73,7 @@ W&B dashboards + model registry, base-vs-adapted evaluation report, live before/
 
 ## Repo layout
 ```
-benchmarks/              # eval benchmarks (submodules / pinned clones), never trained on
+benchmarks/              # eval benchmarks, downloaded at pinned commits (gitignored), never trained on
 configs/                 # Hydra configs per stage
 data/manifests/          # committed source manifests; rest of data/ is gitignored scratch
 docker/                  # train, serve, eval-sandbox images

@@ -17,7 +17,7 @@ Keep this section up to date whenever you add, move or remove a top-level direct
 
 ```
 .
-├── benchmarks/              # eval benchmarks as git submodules / pinned clones (never trained on)
+├── benchmarks/              # eval benchmarks, downloaded at pinned commits (gitignored, never trained on)
 ├── configs/                 # configs per stage (data/ and eval/ read with yaml, train/ with Hydra)
 ├── data/                    # local scratch, gitignored except manifests/
 │   └── manifests/           # one YAML per source: URL, revision, license, checksums, W&B artifact
@@ -66,12 +66,11 @@ Known limitation: W&B is hosted, so run metadata leaves our machines. The datase
 
 ## Cloning
 
-Benchmarks are git submodules (`benchmarks/coboleval`), so clone with submodules:
+Benchmarks aren't stored in git. Download them at their pinned commits (sha256-checked):
 
 ```bash
-git clone --recurse-submodules <repo-url>
-# already cloned without them:
-git submodule update --init
+git clone <repo-url>
+python -m onprem_codegen.eval.benchmarks     # -> benchmarks/<name>/
 ```
 
 ## Running on Vast.ai
