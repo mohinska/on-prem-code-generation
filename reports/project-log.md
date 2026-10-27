@@ -16,3 +16,9 @@ Running log of decisions, code changes, runs and results (exact numbers). Source
 - Numbers (files that pass): plain 18/50, `-std=ibm` 17/50, `-std=ibm -free` 8/50.
 - Failures are mostly fixed-format issues (`invalid indicator X at column 7`), missing copybooks, and dialect keywords.
 - Decision: `execute(content, [])` stays as is. No flags parameter on `execute()`: `-std=ibm` does not help and `-free` hurts. The failures are tagged, not fixed.
+
+### clean-corpus v0 with syntax check (local, not uploaded to W&B)
+- What: `python -m onprem_codegen.data.clean --no-wandb` on the local raw-corpus v0, commit `5e31624`. Syntax check = `execute(content, [])` (`cobc -fsyntax-only`, no flags, see the cobc flags entry) on kept non-`.cpy` files.
+- Numbers (`stats.json`): 8203 in, 4263 kept (65,527,424 bytes; xcobol 2255, stack_v1 2008). Dropped: exact_dup 1452, near_dup 1347, too_short 886, not_text 188, high_nonalnum 66, too_long 1.
+- Syntax check of the 4263 kept: ok 1916, compile_error 2129, skipped 218 (the `.cpy` copybooks). Files are only tagged, none dropped.
+- Licenses are only tagged (decision): kept includes GPL-3.0 16 files, `kept_by_license_ok` is in `stats.json`.
