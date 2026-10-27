@@ -27,7 +27,6 @@ data/*
 
 # Benchmarks are pinned clones fetched by `make benchmarks`; never committed
 benchmarks/*
-!benchmarks/.gitkeep
 
 # Model weights and large data
 *.safetensors
