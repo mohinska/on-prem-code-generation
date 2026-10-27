@@ -25,10 +25,9 @@ multirun/
 data/*
 !data/manifests/
 
-# Benchmarks are git submodules / pinned clones; ignore anything else dropped there
+# Benchmarks are pinned clones fetched by `make benchmarks`; never committed
 benchmarks/*
 !benchmarks/.gitkeep
-!benchmarks/coboleval
 
 # Model weights and large data
 *.safetensors
