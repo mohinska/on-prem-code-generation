@@ -17,7 +17,7 @@ def load_codenet(cfg, root: str | Path, out_dir: str | Path) -> list[ManifestRow
     out.mkdir(parents=True, exist_ok=True)
     rows = []
     with open(out / "corpus.jsonl", "w") as f:
-        for meta in sorted((root / "metadata").glob("p*.csv")):
+        for meta in sorted((root / "metadata").glob("p[0-9]*.csv")):
             with open(meta, newline="") as m:
                 accepted = {r["submission_id"]: r["filename_ext"] for r in csv.DictReader(m)
                             if r["language"] == "COBOL" and r["status"] == "Accepted"}

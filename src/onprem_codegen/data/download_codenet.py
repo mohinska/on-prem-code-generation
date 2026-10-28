@@ -158,7 +158,7 @@ def build_task_pool(root: Path, cfg: dict) -> tuple[list[dict], dict]:
     io_root = root / "derived" / "input_output" / "data"
     reasons = collections.Counter()
     tasks = []
-    pids = sorted(p.stem for p in (root / "metadata").glob("p*.csv"))
+    pids = sorted(p.stem for p in (root / "metadata").glob("p[0-9]*.csv"))
     for pid in pids:
         tests = _tests(io_root / pid)
         html = root / "problem_descriptions" / f"{pid}.html"

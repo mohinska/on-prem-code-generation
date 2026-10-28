@@ -16,6 +16,7 @@ FILES = {
     "Project_CodeNet/metadata/p00001.csv": META.format(p="p00001"),
     "Project_CodeNet/metadata/p00002.csv": META.format(p="p00002"),
     "Project_CodeNet/metadata/p00003.csv": META.format(p="p00003"),
+    "Project_CodeNet/metadata/problem_list.csv": "id,name,dataset,time_limit,memory_limit,rating,tags,complexity\np00001,Sum,AIZU,1,1,,,\n",
     "Project_CodeNet/problem_descriptions/p00001.html":
         "<h1>Sum</h1><p>Print   A + B.</p><h2>Sample Input</h2><pre>3 5\n</pre><h2>Sample Output</h2><pre>8\n</pre>",
     "Project_CodeNet/problem_descriptions/p00002.html": "<p>See the figure for the long statement.</p><img src='x.png'>",
