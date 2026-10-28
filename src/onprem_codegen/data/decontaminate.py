@@ -1,6 +1,7 @@
 """Flag corpus files / SFT rows that overlap benchmark tasks, by n-gram containment.
 
     python -m onprem_codegen.data.decontaminate --input <jsonl> --report <path>
+    python -m onprem_codegen.data.decontaminate --artifact sft-dataset:latest   # W&B: check, then add the alias
 
 Every part of every task (prompt, canonical solution, caller programs, expected outputs) of every benchmark in
 configs/data/decontam.yaml is shingled; a text is a hit when it contains >= `threshold` of the shingles of one part.
@@ -97,12 +98,38 @@ def run(src: Path, report_path: Path, cfg: dict) -> int:
     return int(bool(hits))
 
 
+ALIAS = "decontaminated"  # what configs/train/sft.yaml pulls
+
+
+def check_artifact(art, cfg: dict, report_path: Path) -> int:
+    """Checks the sft.jsonl of a sft-dataset version; adds the `decontaminated` alias to it only if there are no hits."""
+    rc = run(Path(art.download()) / "sft.jsonl", report_path, cfg)
+    if rc == 0 and ALIAS not in art.aliases:
+        art.aliases.append(ALIAS)
+        art.save()
+    return rc
+
+
 def main() -> None:
     ap = argparse.ArgumentParser()
-    ap.add_argument("--input", type=Path, required=True)
-    ap.add_argument("--report", type=Path, required=True)
+    ap.add_argument("--input", type=Path)
+    ap.add_argument("--report", type=Path, default=Path("decontam_report.json"))
+    ap.add_argument("--artifact", help="W&B sft-dataset version to check, e.g. sft-dataset:latest")
     a = ap.parse_args()
-    sys.exit(run(a.input, a.report, yaml.safe_load(Path("configs/data/decontam.yaml").read_text())))
+    cfg = yaml.safe_load(Path("configs/data/decontam.yaml").read_text())
+    if not a.artifact:
+        sys.exit(run(a.input, a.report, cfg))
+
+    import wandb
+    from onprem_codegen.utils import init_run
+    with init_run("decontaminate", f"decontaminate-{a.artifact.replace(':', '-')}", cfg) as r:
+        r.use_artifact(a.artifact)  # lineage
+        api_art = wandb.Api().artifact(f"{r.entity}/{r.project}/{a.artifact}")
+        rc = check_artifact(api_art, cfg, a.report)
+        rep = wandb.Artifact("decontam-report", type="report", metadata={"dataset": api_art.name, "passed": rc == 0})
+        rep.add_file(str(a.report))
+        r.log_artifact(rep)
+    sys.exit(rc)
 
 
 if __name__ == "__main__":

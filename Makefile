@@ -2,7 +2,7 @@
 PY ?= python
 export PYTHONPATH := src
 
-.PHONY: test codenet data sft-data train train-smoke benchmarks eval eval-generate eval-execute
+.PHONY: test codenet data sft-data decontam train train-smoke benchmarks eval eval-generate eval-execute
 
 test:
 	$(PY) -m pytest -q
@@ -20,6 +20,11 @@ data: codenet
 # Runs generated code in the eval-sandbox image: docker compose build eval-sandbox
 sft-data:
 	$(PY) -m onprem_codegen.data.rejection_sampling $(ARGS)
+
+# Check a sft-dataset version against the benchmarks; no hits -> alias `decontaminated` (what `make train` pulls)
+# make decontam ARGS="--artifact sft-dataset:v1"
+decontam:
+	$(PY) -m onprem_codegen.data.decontaminate --artifact sft-dataset:latest $(ARGS)
 
 train-smoke:
 	$(PY) -m onprem_codegen.train.sft

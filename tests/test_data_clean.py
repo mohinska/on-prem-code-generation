@@ -167,6 +167,30 @@ def test_decontaminate_cli_reports_hits_in_any_jsonl_and_fails_on_them(bench, tm
     assert decon.run(src, report, cfg) == 0
 
 
+class _FakeArtifact:
+    def __init__(self, root, aliases=()):
+        self.root, self.aliases, self.saved = root, list(aliases), False
+
+    def download(self):
+        return str(self.root)
+
+    def save(self):
+        self.saved = True
+
+
+def test_check_artifact_sets_alias_only_when_clean(bench, tmp_path):
+    cfg = bench(fake=[_task(_prog("BENCH", 15))])
+    art = _FakeArtifact(tmp_path, aliases=["latest"])
+    (tmp_path / "sft.jsonl").write_text(json.dumps({"prompt": "p", "completion": _prog("FINE", 15)}) + "\n")
+    assert decon.check_artifact(art, cfg, tmp_path / "r.json") == 0
+    assert art.aliases == ["latest", "decontaminated"] and art.saved
+
+    dirty = _FakeArtifact(tmp_path, aliases=["latest"])
+    (tmp_path / "sft.jsonl").write_text(json.dumps({"prompt": "p", "completion": _prog("BENCH", 15)}) + "\n")
+    assert decon.check_artifact(dirty, cfg, tmp_path / "r.json") == 1
+    assert dirty.aliases == ["latest"] and not dirty.saved
+
+
 # --- syntax check
 
 def _fake_execute(code, tests, **kw):

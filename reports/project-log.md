@@ -28,3 +28,6 @@ Running log of decisions, code changes, runs and results (exact numbers). Source
 - CLI: `python -m onprem_codegen.data.decontaminate --input <jsonl> --report <path>` for `corpus.jsonl` and `sft.jsonl`, exit code 1 on any hit.
 - Numbers: `data/raw/clean-corpus/corpus.jsonl` 4263 checked, 0 hits; `tests/fixtures/sft_smoke.jsonl` 8 checked, 0 hits.
 - Decision: the `PROGRAM-ID` entry-point check is not brought back, and HumanEval-Python is not checked.
+
+### alias `sft-dataset:decontaminated`
+- `make decontam` (`decontaminate --artifact sft-dataset:latest`) downloads a sft-dataset version, checks `sft.jsonl` with the decontamination above, logs a `decontam-report` artifact and adds the alias `decontaminated` to that version only when there are no hits (the alias then moves to it). `configs/train/sft.yaml` pulls this alias. Not run against W&B yet: there is no sft-dataset version, and C should confirm the flow.
