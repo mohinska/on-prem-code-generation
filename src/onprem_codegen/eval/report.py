@@ -2,7 +2,7 @@
 onprem_codegen/eval/report.py — base vs adapted markdown table from two eval runs.
 
     python -m onprem_codegen.eval.report outputs/eval/baseline/metrics.json \
-        outputs/eval/sft-v0/metrics.json --out reports/sft-v0.md
+        outputs/eval/sft-v0/metrics.json --out docs/sft-v0.md
 
 Inputs are the metrics.json files written by eval/run.py: {"<benchmark>/<task_mode>/<mode>/<decoding>": summary}.
 """

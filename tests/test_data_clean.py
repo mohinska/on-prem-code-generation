@@ -4,11 +4,12 @@ import sys
 from pathlib import Path
 
 import pytest
-import yaml
 
-from onprem_codegen.data import clean
+from onprem_codegen.data import clean, collect
 from onprem_codegen import utils
+from onprem_codegen.eval.benchmarks import Task
 from onprem_codegen.eval.execute import ExecResult, Status
+from onprem_codegen.data import decontaminate as decon
 from onprem_codegen.data.decontaminate import decontaminate
 from onprem_codegen.data.dedup import exact_dedup, near_dedup
 from onprem_codegen.data.filters import apply_filters
@@ -24,7 +25,7 @@ def _prog(tag: str, n: int = 12) -> str:
     return "\n".join(f"           MOVE {tag}-{i} TO WS-OUT-{i}." for i in range(n)) + "\n"
 
 
-def _row(content: str, source="stack_v1", path="a.cbl") -> ManifestRow:
+def _row(content: str, source="stack_v1_cobol", path="a.cbl") -> ManifestRow:
     rec, h, n = raw_record(source, content, "MIT", {})
     return ManifestRow(id=h, source=source, source_version="v", path=path, ext=".cbl", repo=None,
                        sha256=h, license="MIT", license_ok=True, n_bytes=n)
@@ -63,11 +64,11 @@ def test_filters_keep_earlier_reason():
 
 def test_exact_dedup_stack_beats_xcobol_regardless_of_order():
     c = _prog("SAME")
-    rows = exact_dedup([_row(c, "xcobol", "x.cbl"), _row(c, "stack_v1", "s.cbl")])
+    rows = exact_dedup([_row(c, "xcobol", "x.cbl"), _row(c, "stack_v1_cobol", "s.cbl")])
     r = _by_path(rows)
     assert r["s.cbl"].kept and not r["x.cbl"].kept
     assert r["x.cbl"].filter_reason == "exact_dup"
-    assert r["x.cbl"].exact_dup_of == "stack_v1:s.cbl"
+    assert r["x.cbl"].exact_dup_of == "stack_v1_cobol:s.cbl"
 
 
 def test_exact_dedup_keeps_distinct_files():
@@ -80,7 +81,7 @@ def test_exact_dedup_keeps_distinct_files():
 def test_near_dedup_drops_near_copy_across_sources_and_keeps_distinct():
     base = _prog("BASE", 40)
     near = base + "           DISPLAY WS-EXTRA.\n"  # one extra line: Jaccard well above 0.8
-    rows = [_row(base, "stack_v1", "s.cbl"), _row(near, "xcobol", "x.cbl"), _row(_prog("OTHER", 40), "xcobol", "o.cbl")]
+    rows = [_row(base, "stack_v1_cobol", "s.cbl"), _row(near, "xcobol", "x.cbl"), _row(_prog("OTHER", 40), "xcobol", "o.cbl")]
     contents = {r.id: c for r, c in zip(rows, [base, near, _prog("OTHER", 40)])}
     r = _by_path(near_dedup(rows, contents, DEDUP))
     assert r["s.cbl"].kept and r["o.cbl"].kept
@@ -90,31 +91,104 @@ def test_near_dedup_drops_near_copy_across_sources_and_keeps_distinct():
 
 # --- decontamination
 
-def _bench(tmp_path, prompt):
-    p = tmp_path / "bench.jsonl"
-    p.write_text(json.dumps({"task_id": "CobolEval/0", "prompt": prompt, "tests": [{"test": "TEST-CASE-1"}]}) + "\n")
-    return {"benchmark": str(p), "ngram": 5, "threshold": 0.5}
+def _task(prompt, canonical=None, tests=(), benchmark="fake", mode="completion", tid="t0"):
+    return Task(task_id=f"{benchmark}/{tid}", benchmark=benchmark, mode=mode, lang="cobol", prompt=prompt,
+                entry_point="X", tests=list(tests), canonical_solution=canonical)
 
 
-def test_decontaminate_drops_copy_of_benchmark_prompt(tmp_path):
+@pytest.fixture
+def bench(monkeypatch):
+    """Registers fake benchmarks for decontaminate.load; returns a cfg that uses them."""
+    def register(**tasks):
+        monkeypatch.setattr(decon, "load", lambda name: tasks[name])
+        return {"benchmarks": list(tasks), "ngram": 5, "threshold": 0.5}
+    return register
+
+
+def test_decontaminate_drops_copy_of_benchmark_prompt(bench):
     prompt = _prog("BENCH", 15)
-    cfg = _bench(tmp_path, prompt)
+    cfg = bench(fake=[_task(prompt)])
     leak, clean_ = _row(prompt + "           STOP RUN.\n", path="leak"), _row(_prog("FINE", 15), path="fine")
     contents = {leak.id: prompt + "           STOP RUN.\n", clean_.id: _prog("FINE", 15)}
     rows, report = decontaminate([leak, clean_], contents, cfg)
     r = _by_path(rows)
     assert r["leak"].decontam_hit and not r["leak"].kept and r["leak"].filter_reason == "decontam"
     assert r["fine"].kept and not r["fine"].decontam_hit
-    assert [e["path"] for e in report] == ["leak"] and report[0]["task_id"] == "CobolEval/0"
+    assert [e["path"] for e in report] == ["leak"]
+    assert (report[0]["task_id"], report[0]["benchmark"], report[0]["part"]) == ("fake/t0", "fake", "prompt")
 
 
-def test_decontaminate_ignores_comment_only_differences(tmp_path):
+def test_decontaminate_ignores_comment_only_differences(bench):
     prompt = _prog("BENCH", 15)
-    cfg = _bench(tmp_path, prompt)
+    cfg = bench(fake=[_task(prompt)])
     text = "      * a full-line comment\n" + prompt.replace("\n", " *> trailing\n")
     row = _row(text)
     [out], _ = decontaminate([row], {row.id: text}, cfg)
     assert out.decontam_hit
+
+
+def test_decontaminate_catches_canonical_solution_of_an_instruct_task_in_another_benchmark(bench):
+    solution = _prog("SOLUTION", 15)
+    cfg = bench(a=[_task(_prog("A", 15), benchmark="a")],
+                b=[_task("Write a program that adds numbers and prints the sum, with natural language words only here.",
+                         canonical=solution, benchmark="b", mode="instruct")])
+    row = _row(solution)
+    [out], report = decontaminate([row], {row.id: solution}, cfg)
+    assert out.decontam_hit and (report[0]["benchmark"], report[0]["part"]) == ("b", "canonical_solution")
+
+
+def test_decontaminate_checks_reference_files_of_file_io_tasks(bench):
+    expected = "\n".join(f"ROW {i} TOTAL {i * 7}" for i in range(10))
+    cfg = bench(fake=[_task("p " * 20, tests=[{"input_files": {"in": "x"}, "expected_outputs": {"out.txt": expected}}])])
+    row = _row(expected)
+    [out], report = decontaminate([row], {row.id: expected}, cfg)
+    assert out.decontam_hit and report[0]["part"] == "expected_output"
+
+
+def test_decontaminate_ignores_short_expected_values(bench):
+    cfg = bench(fake=[_task(_prog("BENCH", 15), tests=[{"caller": "C", "expected": "True"}])])
+    row = _row(_prog("OTHER", 15) + "           MOVE True TO X.\n")
+    [out], report = decontaminate([row], {row.id: _prog("OTHER", 15) + "           MOVE True TO X.\n"}, cfg)
+    assert not out.decontam_hit and report == []
+
+
+def test_decontaminate_cli_reports_hits_in_any_jsonl_and_fails_on_them(bench, tmp_path):
+    prompt = _prog("BENCH", 15)
+    cfg = bench(fake=[_task(prompt)])
+    src = tmp_path / "sft.jsonl"
+    src.write_text("\n".join(json.dumps(d) for d in [
+        {"prompt": "write something", "completion": "```cobol\n" + prompt + "```", "task_id": "x/1"},
+        {"prompt": "write other", "completion": _prog("FINE", 15), "task_id": "x/2"}]) + "\n")
+    report = tmp_path / "report.json"
+    assert decon.run(src, report, cfg) == 1
+    rep = json.loads(report.read_text())
+    assert rep["checked"] == 2 and [h["line"] for h in rep["hits"]] == [1] and rep["by_benchmark"] == {"fake": 1}
+    src.write_text(json.dumps({"prompt": "p", "completion": _prog("FINE", 15)}) + "\n")
+    assert decon.run(src, report, cfg) == 0
+
+
+class _FakeArtifact:
+    def __init__(self, root, aliases=()):
+        self.root, self.aliases, self.saved = root, list(aliases), False
+
+    def download(self):
+        return str(self.root)
+
+    def save(self):
+        self.saved = True
+
+
+def test_check_artifact_sets_alias_only_when_clean(bench, tmp_path):
+    cfg = bench(fake=[_task(_prog("BENCH", 15))])
+    art = _FakeArtifact(tmp_path, aliases=["latest"])
+    (tmp_path / "sft.jsonl").write_text(json.dumps({"prompt": "p", "completion": _prog("FINE", 15)}) + "\n")
+    assert decon.check_artifact(art, cfg, tmp_path / "r.json") == 0
+    assert art.aliases == ["latest", "decontaminated"] and art.saved
+
+    dirty = _FakeArtifact(tmp_path, aliases=["latest"])
+    (tmp_path / "sft.jsonl").write_text(json.dumps({"prompt": "p", "completion": _prog("BENCH", 15)}) + "\n")
+    assert decon.check_artifact(dirty, cfg, tmp_path / "r.json") == 1
+    assert dirty.aliases == ["latest"] and not dirty.saved
 
 
 # --- syntax check
@@ -149,16 +223,13 @@ def test_syntax_check_tags_kept_files_and_leaves_the_rest(monkeypatch):
 
 def test_clean_main_filters_dedups_decontaminates_and_never_deletes(tmp_path, monkeypatch):
     shutil.copytree(ROOT / "configs", tmp_path / "configs")
-    bench = tmp_path / "bench.jsonl"
     leak_prompt = _prog("BENCH", 30)
-    bench.write_text(json.dumps({"task_id": "CobolEval/0", "prompt": leak_prompt, "tests": [{"test": "T"}]}) + "\n")
-    dec = tmp_path / "configs/data/decontam.yaml"
-    dec.write_text(yaml.safe_dump({**yaml.safe_load(dec.read_text()), "benchmark": str(bench)}))
+    monkeypatch.setattr(decon, "load", lambda name: [_task(leak_prompt, benchmark=name)])
 
     files = {  # name -> (source, content)
-        "good": ("stack_v1", _prog("GOOD", 30)),
+        "good": ("stack_v1_cobol", _prog("GOOD", 30)),
         "dup": ("xcobol", _prog("GOOD", 30)),
-        "short": ("stack_v1", "ONE\n"),
+        "short": ("stack_v1_cobol", "ONE\n"),
         "leak": ("xcobol", leak_prompt),
     }
     raw = tmp_path / "raw"
@@ -192,8 +263,40 @@ def test_clean_main_filters_dedups_decontaminates_and_never_deletes(tmp_path, mo
     stats = json.loads((out / "stats.json").read_text())
     assert stats["files_in"] == 4 and stats["files_kept"] == 1
     assert stats["by_syntax_check"] == {"ok": 1}
+    assert sum(stats["by_benchmark"].values()) == 1
     assert stats["kept_by_license_ok"] == {"True": 1}  # license is a tag, not a filter
     assert stats["by_reason"] == {"kept": 1, "exact_dup": 1, "too_short": 1, "decontam": 1}
+
+
+# --- collect
+
+def _collect(tmp_path, monkeypatch, *args):
+    shutil.copytree(ROOT / "configs", tmp_path / "configs")
+    (tmp_path / "xcobol").mkdir()
+    one = lambda src: lambda *a, **k: [_row(_prog(src), src, src)]
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr(collect, "OUT", tmp_path / "out")
+    (tmp_path / "out").mkdir()
+    for name, src in (("load_stack_v1", "stack_v1_cobol"), ("load_xcobol", "xcobol"), ("load_codenet", "codenet_cobol")):
+        monkeypatch.setattr(collect, name, one(src))
+    monkeypatch.setattr(sys, "argv", ["collect", "--no-wandb", "--xcobol-root", str(tmp_path / "xcobol"), *args])
+    collect.main()
+    return [r.source for r in read_manifest(str(tmp_path / "out/manifest.parquet"))]
+
+
+def test_collect_fails_loudly_when_a_source_has_no_data(tmp_path, monkeypatch):
+    with pytest.raises(SystemExit, match="codenet_cobol"):
+        _collect(tmp_path, monkeypatch, "--codenet-root", str(tmp_path / "missing"))
+
+
+def test_collect_skip_leaves_the_source_out_and_sources_use_the_contract_names(tmp_path, monkeypatch):
+    assert _collect(tmp_path, monkeypatch, "--skip", "codenet_cobol") == ["stack_v1_cobol", "xcobol"]
+
+
+def test_collect_includes_codenet_when_its_data_exists(tmp_path, monkeypatch):
+    (tmp_path / "cn").mkdir()
+    assert _collect(tmp_path, monkeypatch, "--codenet-root", str(tmp_path / "cn")) == [
+        "stack_v1_cobol", "xcobol", "codenet_cobol"]
 
 
 # --- W&B wiring

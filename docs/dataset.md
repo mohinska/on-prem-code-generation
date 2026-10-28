@@ -7,7 +7,7 @@ we use open models only (Qwen itself) because we can't call external APIs.
 
 | # | Source | Method | Paper result | Status |
 |---|---|---|---|---|
-| 1 | Real COBOL: The Stack v1 dedup COBOL subset + X-COBOL (GitHub) | MinHash dedup → compile with GnuCOBOL → failing programs get up to 3 repair attempts by Qwen, using the compiler errors | ~31K programs | **Start here** |
+| 1 | Real COBOL: The Stack v1 full COBOL subset + X-COBOL (GitHub) | MinHash dedup → compile with GnuCOBOL; failures are tagged, never repaired (the paper repairs them with GPT-4o; we keep real code real) | ~31K programs | **Start here** |
 | 2 | Instruction data | Generate a task description for each program; rejection sampling keeps solutions that compile and pass tests | — | Planned |
 
 ## Skipped

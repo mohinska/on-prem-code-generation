@@ -12,7 +12,7 @@ from datasketch import MinHash, MinHashLSH
 
 from onprem_codegen.data.schema import ManifestRow
 
-PRIORITY = {"stack_v1": 0, "xcobol": 1, "codenet": 2}
+PRIORITY = {"stack_v1_cobol": 0, "xcobol": 1, "codenet_cobol": 2}
 
 
 def exact_dedup(rows: list[ManifestRow]) -> list[ManifestRow]:

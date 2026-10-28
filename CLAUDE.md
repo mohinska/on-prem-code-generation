@@ -77,8 +77,7 @@ benchmarks/              # eval benchmarks, downloaded at pinned commits (gitign
 configs/                 # Hydra configs per stage
 data/manifests/          # committed source manifests; rest of data/ is gitignored scratch
 docker/                  # train, serve, eval-sandbox images
-docs/                    # project brief, setup notes
-reports/                 # project-log.md (running log), evaluation report
+docs/                    # project brief, setup notes, project-log.md (running log), evaluation reports
 scripts/                 # Vast.ai instance bootstrap
 src/onprem_codegen/      # data/ train/ eval/ serve/ — run as `python -m onprem_codegen.<stage>...`
                          # prompt.py: build_prompt, shared by SFT data and eval
@@ -87,7 +86,7 @@ docker-compose.yml       # local GPU box only; Vast instances can't run Docker
 Makefile                 # pipeline entry points
 requirements.txt
 ```
-Entry points: `make data`, `make sft-data`, `make train`, `make benchmarks` (log benchmark-* artifacts), `make eval` (+ `eval-generate`, `eval-execute`). `make register` is planned.
+Entry points: `make data`, `make sft-data`, `make decontam` (alias `decontaminated` on sft-dataset), `make train`, `make benchmarks` (log benchmark-* artifacts), `make eval` (+ `eval-generate`, `eval-execute`). `make register` is planned.
 
 ## Commands (local GPU box)
 ```bash
@@ -113,7 +112,7 @@ update the "Project structure" section of README.md (and this layout) in the sam
 The same goes for "Key decisions" when a decision above changes.
 
 ## Project log
-- Everything we do is documented in [reports/project-log.md](reports/project-log.md): decisions, code changes, runs,
+- Everything we do is documented in [docs/project-log.md](docs/project-log.md): decisions, code changes, runs,
   sweeps, evals, problems and **every result with exact numbers**. It is the source for the intermediate report,
   the final report and the paper.
 - The log describes the project as it is now; new runs and results are added as entries under "Results" (what was run,

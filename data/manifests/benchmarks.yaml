@@ -123,13 +123,11 @@ benchmarks:
     local_path: null            # loaded from the raw manifest, not copied here
 
 decontamination:
-  script: src/onprem_codegen/data/decontaminate.py   # TODO: write
+  script: src/onprem_codegen/data/decontaminate.py
+  config: configs/data/decontam.yaml      # benchmarks checked, n-gram size, threshold
   checks:
-    - "exact match after whitespace/comment normalization"
-    - "near-duplicate match (MinHash) between benchmark prompts/solutions and every training set"
-    - "entry-point / function-name match against HumanEval (catches Java and COBOL ports of HumanEval)"
-  against: [stack_v1_cobol, xcobol, codenet_cobol, mainframe_instruct, rejection_sampling, synthetic]
-  benchmarks_checked: [coboleval, cobolcodebench, humaneval_python, cobol_javatrans]
+    - "n-gram containment (after uppercasing and stripping comments) of every part of every task: prompt, canonical solution, caller programs, expected outputs"
+  against: [clean-corpus, sft-dataset]
   when:
     - "clean stage: before building clean-corpus"
     - "sft stage: on every sft-dataset version"
