@@ -48,11 +48,11 @@ outputs:
 
 pipeline:
   planned_steps:
-    - "license filter: keep only files from permissively licensed repos"
+    - "license is tagged (license_ok), not used as a filter"
     - "apply the same filters as stack_v1_cobol (syntax check as a tag, no LLM repair)"
     - "exact + near-duplicate removal against stack_v1_cobol (expect heavy overlap)"
     - "decontaminate against benchmarks (see benchmarks.yaml)"
-  thresholds_config: configs/data/xcobol.yaml
+  thresholds_config: [configs/data/filters.yaml, configs/data/dedup.yaml]
 
 provenance_fields_required:
   - source            # "xcobol"

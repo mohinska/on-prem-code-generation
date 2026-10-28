@@ -1,4 +1,4 @@
-"""Stack v1 (dedup) COBOL subset -> raw-corpus records + manifest rows (source=stack_v1_cobol).
+"""Stack v1 (full, not -dedup) COBOL subset -> raw-corpus records + manifest rows (source=stack_v1_cobol).
 
 Writes `<out_dir>/corpus.jsonl` (contracts.md record schema) and returns the manifest rows.
 `cfg` is configs/data/stack_v1_cobol.yaml. The dataset is gated: accept the terms on HF and set HF_TOKEN first.
