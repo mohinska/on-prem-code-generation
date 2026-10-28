@@ -53,8 +53,7 @@ Keep this section up to date whenever you add, move or remove a top-level direct
 ├── configs/                 # per stage: data/ and eval/ (yaml), train/ (Hydra)
 ├── data/                    # local scratch, gitignored except manifests/ (one YAML per source)
 ├── docker/                  # train, serve, eval-sandbox images
-├── docs/                    # project brief, dataset plan, contracts
-├── reports/                 # project-log.md, evaluation report
+├── docs/                    # project brief, dataset plan, contracts, project-log.md, evaluation reports
 ├── scripts/                 # vast_onstart.sh: bootstrap a Vast.ai instance
 ├── src/onprem_codegen/
 │   ├── prompt.py            # build_prompt, shared by SFT data and eval
