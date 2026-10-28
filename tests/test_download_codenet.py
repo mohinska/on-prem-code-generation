@@ -72,10 +72,10 @@ def test_html_keeps_english_only():
 
 def test_codenet_records_follow_contract(tmp_path):
     extract(io.BytesIO(_archive()), tmp_path, PATTERNS)
-    rows = load_codenet(tmp_path / "Project_CodeNet", "1.0.0", tmp_path / "out")
+    rows = load_codenet({"version": "1.0.0", "license": None}, tmp_path / "Project_CodeNet", tmp_path / "out")
     assert [r.path for r in rows] == ["data/p00001/COBOL/s000000001.cbl"]  # accepted COBOL only
     rec = json.loads((tmp_path / "out/corpus.jsonl").read_text())
     assert rec["id"] == rows[0].id == rec["content_sha256"]
-    assert rec["source"] == "codenet_cobol"
+    assert rec["source"] == rows[0].source == "codenet_cobol"
     assert rec["meta"] == {"problem_id": "p00001", "submission_id": "s000000001"}
     assert rec["syntax_check"] == {"status": "skipped", "stderr": ""}

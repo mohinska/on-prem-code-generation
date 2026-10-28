@@ -13,7 +13,7 @@ codenet:
 
 # raw-corpus (Stack v1 + X-COBOL + CodeNet) -> clean-corpus
 data: codenet
-	$(PY) -m onprem_codegen.data.collect --codenet-root data/raw/codenet_cobol/Project_CodeNet
+	$(PY) -m onprem_codegen.data.collect
 	$(PY) -m onprem_codegen.data.clean
 
 # Rejection sampling on A's vLLM server (SSH tunnel on :8000) -> sft-dataset

@@ -8,7 +8,7 @@
 2. Builds data/raw/task-pool/{task_pool.jsonl, stats.json} (contracts.md: task-pool) and logs `task-pool`.
 
 Accepted COBOL submissions reach raw-corpus through collect:
-    python -m onprem_codegen.data.collect --codenet-root data/raw/codenet_cobol/Project_CodeNet
+    python -m onprem_codegen.data.collect
 """
 import argparse
 import collections

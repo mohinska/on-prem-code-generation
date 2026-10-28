@@ -31,3 +31,7 @@ Running log of decisions, code changes, runs and results (exact numbers). Source
 
 ### alias `sft-dataset:decontaminated`
 - `make decontam` (`decontaminate --artifact sft-dataset:latest`) downloads a sft-dataset version, checks `sft.jsonl` with the decontamination above, logs a `decontam-report` artifact and adds the alias `decontaminated` to that version only when there are no hits (the alias then moves to it). `configs/train/sft.yaml` pulls this alias. Not run against W&B yet: there is no sft-dataset version, and C should confirm the flow.
+
+### one set of source names, `collect` without optional sources
+- `ManifestRow.source` now uses the contract names `stack_v1_cobol | xcobol | codenet_cobol` (before: `stack_v1`, `codenet`), the same as `source` in the `corpus.jsonl` records; `docs/contracts.md` and C's code are unchanged. `dedup.PRIORITY` follows. The existing local `raw-corpus` v0 manifest has the old names, so it needs a re-run of `collect` before `clean`.
+- `collect` has no `if codenet_root`: all three loaders have the same call shape, default roots are `data/raw/<source>/`, missing data stops with a message, `--skip <source>` leaves a source out on purpose.

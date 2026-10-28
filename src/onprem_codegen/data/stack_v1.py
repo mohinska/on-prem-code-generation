@@ -1,4 +1,4 @@
-"""Stack v1 (dedup) COBOL subset -> raw-corpus records + manifest rows (source=stack_v1).
+"""Stack v1 (dedup) COBOL subset -> raw-corpus records + manifest rows (source=stack_v1_cobol).
 
 Writes `<out_dir>/corpus.jsonl` (contracts.md record schema) and returns the manifest rows.
 `cfg` is configs/data/stack_v1_cobol.yaml. The dataset is gated: accept the terms on HF and set HF_TOKEN first.
@@ -24,7 +24,7 @@ def load_stack_v1(cfg, out_dir: str | Path, ds=None) -> list[ManifestRow]:
                                    {"original_path": x["max_stars_repo_path"], "original_license": lic})
             f.write(json.dumps(rec) + "\n")
             rows.append(ManifestRow(
-                id=h, source="stack_v1", source_version=cfg["revision"], path=x["max_stars_repo_path"],
+                id=h, source="stack_v1_cobol", source_version=cfg["revision"], path=x["max_stars_repo_path"],
                 ext=Path(x["max_stars_repo_path"]).suffix.lower(), repo=x["max_stars_repo_name"], sha256=h,
                 license=lic, license_ok=lic is not None, n_bytes=n))
     return rows

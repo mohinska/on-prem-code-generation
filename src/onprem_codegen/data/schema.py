@@ -6,7 +6,7 @@ from dataclasses import asdict, dataclass, fields
 import pyarrow as pa
 import pyarrow.parquet as pq
 
-SOURCES = ("stack_v1", "xcobol", "codenet")
+SOURCES = ("stack_v1_cobol", "xcobol", "codenet_cobol")  # same names as `source` in corpus.jsonl records
 
 
 @dataclass
