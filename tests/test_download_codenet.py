@@ -3,7 +3,7 @@ import json
 import tarfile
 
 from onprem_codegen.data.codenet import load_codenet
-from onprem_codegen.data.download_codenet import build_task_pool, extract, html_to_text
+from onprem_codegen.data.download_codenet import _HashingReader, build_task_pool, extract, html_to_text
 
 CFG = {"min_tests": 1, "min_chars": 10, "max_chars": 6000, "max_non_ascii_ratio": 0.05, "drop_with_images": True}
 PATTERNS = ["Project_CodeNet/metadata/*.csv", "Project_CodeNet/problem_descriptions/*.html",
@@ -79,3 +79,11 @@ def test_codenet_records_follow_contract(tmp_path):
     assert rec["source"] == rows[0].source == "codenet_cobol"
     assert rec["meta"] == {"problem_id": "p00001", "submission_id": "s000000001"}
     assert rec["syntax_check"] == {"status": "skipped", "stderr": ""}
+
+
+def test_hashing_reader_prints_progress_every_step(capsys):
+    r = _HashingReader(io.BytesIO(b"x" * 10), every=4, total="1 KB")
+    while r.read(3):
+        pass
+    out = capsys.readouterr().out.splitlines()
+    assert out == ["downloaded 0.0 GB / 1 KB"] * 2  # crossed 4 and 8 bytes, not 12

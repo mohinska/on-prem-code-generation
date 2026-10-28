@@ -36,19 +36,22 @@ MARKER = ".extracted.json"
 class _HashingReader:
     """File-like wrapper that hashes every byte read (the archive is never stored)."""
 
-    def __init__(self, f):
-        self.f, self.h, self.n = f, hashlib.sha256(), 0
+    def __init__(self, f, every=256 << 20, total=None):
+        self.f, self.h, self.n, self.every, self.total, self.steps = f, hashlib.sha256(), 0, every, total, 0
 
     def read(self, size=-1):
         b = self.f.read(size)
         self.h.update(b)
         self.n += len(b)
+        if self.n // self.every > self.steps:  # one line per `every` bytes, so a long download is visible
+            self.steps = self.n // self.every
+            print(f"downloaded {self.n / 1e9:.1f} GB / {self.total}", flush=True)
         return b
 
 
-def extract(src, out_dir: Path, patterns: list[str]) -> dict:
+def extract(src, out_dir: Path, patterns: list[str], total: str | None = None) -> dict:
     """Stream a .tar.gz, write members matching `patterns` under out_dir. Returns sha256 + counts."""
-    reader = _HashingReader(src)
+    reader = _HashingReader(src, total=total)
     counts = collections.Counter()
     with tarfile.open(fileobj=reader, mode="r|gz") as tf:
         for m in tf:
@@ -74,7 +77,7 @@ def download(cfg: dict, archive: str | None, force: bool) -> dict:
     RAW.mkdir(parents=True, exist_ok=True)
     src = open(archive, "rb") if archive else urllib.request.urlopen(cfg["archive"]["url"])
     with src:
-        info = extract(src, RAW, cfg["extract"])
+        info = extract(src, RAW, cfg["extract"], cfg["archive"]["size"])
     pinned = cfg["archive"]["sha256"]
     if pinned and info["sha256"] != pinned:
         raise RuntimeError(f"sha256 mismatch: got {info['sha256']}, configs pin {pinned}")
