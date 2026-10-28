@@ -13,6 +13,7 @@ from onprem_codegen.data import decontaminate as decon
 from onprem_codegen.data.decontaminate import decontaminate
 from onprem_codegen.data.dedup import exact_dedup, near_dedup
 from onprem_codegen.data.filters import apply_filters
+from onprem_codegen.data.xcobol import load_xcobol
 from onprem_codegen.data.schema import ManifestRow, raw_record, read_manifest, write_manifest
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -297,6 +298,12 @@ def test_collect_includes_codenet_when_its_data_exists(tmp_path, monkeypatch):
     (tmp_path / "cn").mkdir()
     assert _collect(tmp_path, monkeypatch, "--codenet-root", str(tmp_path / "cn")) == [
         "stack_v1_cobol", "xcobol", "codenet_cobol"]
+
+
+def test_load_xcobol_fails_when_the_extracted_files_are_missing(tmp_path):
+    (tmp_path / "final_repo_statistics.csv").write_text("Repo Name,Repo URL\n")  # stats alone are not the data
+    with pytest.raises(FileNotFoundError, match="COBOL_Files"):
+        load_xcobol({"version": "2", "doi": "d"}, tmp_path, tmp_path / "out")
 
 
 # --- W&B wiring

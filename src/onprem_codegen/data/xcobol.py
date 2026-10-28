@@ -27,6 +27,8 @@ def _repo_license(repo_url: str, token: str | None) -> str | None:
 
 def load_xcobol(cfg, root: str | Path, out_dir: str | Path) -> list[ManifestRow]:
     root, out = Path(root), Path(out_dir)
+    if not (root / "COBOL_Files").is_dir():  # else collect would write an empty corpus without a word
+        raise FileNotFoundError(f"{root}/COBOL_Files is missing: download and extract X-COBOL (doi {cfg['doi']})")
     out.mkdir(parents=True, exist_ok=True)
     cache = root / "licenses.json"
     lic = json.loads(cache.read_text()) if cache.exists() else {}
