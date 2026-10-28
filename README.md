@@ -49,7 +49,7 @@ Keep this section up to date whenever you add, move or remove a top-level direct
 
 ```
 .
-├── benchmarks/              # pinned benchmark clones (never trained on)
+├── benchmarks/              # eval benchmarks, downloaded at pinned commits (gitignored, never trained on)
 ├── configs/                 # per stage: data/ and eval/ (yaml), train/ (Hydra)
 ├── data/                    # local scratch, gitignored except manifests/ (one YAML per source)
 ├── docker/                  # train, serve, eval-sandbox images
@@ -120,7 +120,8 @@ then tunnel with `ssh -p <PORT> root@<HOST> -N -L 8000:localhost:8000`. `localho
 
 Generation needs only the vLLM server (over the tunnel); execution needs the `eval-sandbox` image
 (no network, read-only, resource-capped). Vast has no Docker, so execution runs locally.
-Settings: `configs/eval/baseline.yaml`, sampling per mode in `data/manifests/benchmarks.yaml`.
+Settings: `configs/eval/baseline.yaml` (`smoke.yaml`: fewer thinking samples, for a quick check with `--limit`),
+sampling per mode in `data/manifests/benchmarks.yaml`.
 
 ```bash
 docker build -f docker/eval-sandbox.Dockerfile -t onprem-codegen/eval-sandbox .   # once

@@ -25,7 +25,7 @@ multirun/
 data/*
 !data/manifests/
 
-# Benchmarks are pinned clones fetched by `make benchmarks`; never committed
+# Benchmarks are downloaded at pinned commits by `make benchmarks`; never committed
 benchmarks/*
 
 # Model weights and large data

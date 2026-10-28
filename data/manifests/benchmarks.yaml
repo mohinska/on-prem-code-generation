@@ -3,8 +3,8 @@ role: eval_only
 forbidden_for_training: true    # enforced by the decontamination script
 description: >
   Evaluation benchmarks for COBOL code generation, plus HumanEval-Python as a
-  regression check for catastrophic forgetting. Kept under benchmarks/ (git
-  submodules or pinned clones) and logged as W&B artifacts; never copied into
+  regression check for catastrophic forgetting. Downloaded at pinned commits into
+  benchmarks/ (gitignored) and logged as W&B artifacts; never copied into
   any training artifact.
 
 evaluation_protocol:
@@ -30,7 +30,7 @@ evaluation_protocol:
     thinking:
       enable_thinking: true     # Qwen advises against greedy decoding in thinking mode
       sampled: {temperature: 0.6, top_p: 0.95, n: 20}   # pass@1 and pass@10; TODO: confirm Qwen3.8 recommended values
-      max_new_tokens: 16384     # reasoning + program; must fit the server's --max-model-len. Raise it if
+      max_new_tokens: 28000     # reasoning + program; must fit the server's --max-model-len (32768). 16384 truncated 12/20. Raise it if
                                 # the logged truncation rate is high (truncated answers count as failures)
   runs: 3                       # greedy: average of three runs, zero-shot (paper protocol)
   per_sample_logging: "W&B Table with prompt, generation, compile log, test result, mode"
@@ -42,11 +42,11 @@ benchmarks:
     local_path: benchmarks/coboleval/
     size: "146 problems (HumanEval translated to COBOL)"
     n_tasks: 146
-    revision: 0bb96c3114bb2bb28e221e9d6000614781f8609d   # = the submodule commit pinned in benchmarks/coboleval
+    revision: 0bb96c3114bb2bb28e221e9d6000614781f8609d
     license: "MIT"
-    setup: "git submodule update --init benchmarks/coboleval"
     fetch:
-      source: submodule         # read from the checked-out submodule, not downloaded
+      source: github
+      repo: zorse-project/COBOLEval
       files:
         completion: {path: data/CobolEval.jsonl, sha256: b018d90bdc53b32c3c76b9a67462e3f572f894dd98f0f084fc779992c7d21264}
     test_protocol: >

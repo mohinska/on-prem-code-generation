@@ -40,8 +40,15 @@ TABLE_REASONING = 2000
 
 # ---------- helpers ----------
 
-def protocol() -> dict:
-    return yaml.safe_load(benchmarks.MANIFEST.read_text(encoding="utf-8"))["evaluation_protocol"]
+def protocol(cfg: dict | None = None) -> dict:
+    """evaluation_protocol from the manifest; cfg["protocol_overrides"] (e.g. a cheaper smoke run)
+    replaces keys per mode: {thinking: {sampled: {n: 10}}}."""
+    proto = yaml.safe_load(benchmarks.MANIFEST.read_text(encoding="utf-8"))["evaluation_protocol"]
+    for mode, over in ((cfg or {}).get("protocol_overrides") or {}).items():
+        for key, val in over.items():
+            m = proto["modes"][mode]
+            m[key] = {**m[key], **val} if isinstance(val, dict) else val
+    return proto
 
 
 def sampling_plan(proto: dict, mode: str, decoding: str, seed: int) -> list[dict] | None:
@@ -77,7 +84,7 @@ def _sample(row: dict) -> tuple:
 def generate(cfg: dict, tasks: dict, out: Path) -> Path:
     path = out / "generations.jsonl"
     done = {_unit(r) for r in read_jsonl(path)}
-    proto = protocol()
+    proto = protocol(cfg)
     client = VllmClient(cfg["server"]["base_url"], cfg["server"]["model"], cfg["server"]["request_timeout_s"])
 
     units = []
@@ -226,7 +233,7 @@ def log_generations(run, gen_path: Path, cfg: dict) -> None:
 
 def run_config(cfg: dict) -> dict:
     pins = {name: {"revision": b["revision"], "files": b["fetch"]["files"]} for name, b in benchmarks.manifest().items()}
-    return {**cfg, "git_commit": git_commit(), "protocol": protocol(), "benchmark_pins": pins,
+    return {**cfg, "git_commit": git_commit(), "protocol": protocol(cfg), "benchmark_pins": pins,
             "execute_backend": os.environ.get("EXECUTE_BACKEND", "docker"),
             "vast_instance": os.environ.get("CONTAINER_ID") or os.environ.get("VAST_CONTAINERLABEL")}
 

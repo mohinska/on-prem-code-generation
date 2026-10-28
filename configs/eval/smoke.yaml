@@ -1,0 +1,29 @@
+# Smoke run: baseline.yaml with fewer thinking samples, to check the pipeline end to end quickly.
+#   python -m onprem_codegen.eval.run --config configs/eval/smoke.yaml --limit 5 --run-name <name>
+run_name: baseline-smoke
+model_name: Qwen/Qwen3.8-27B
+adapter: null
+
+server:
+  base_url: http://localhost:8000/v1
+  model: base
+  request_timeout_s: 7200             # thinking requests (n=10, up to 28k tokens each) wait in the vLLM queue
+  concurrency: 8
+
+benchmarks:
+  coboleval: [completion]
+  cobolcodebench: [completion, instruct]
+  humaneval_python: [completion]
+modes: [non_thinking, thinking]
+decodings: [greedy, sampled]
+seed: 1234
+
+protocol_overrides:                   # applied on top of evaluation_protocol in benchmarks.yaml
+  thinking:
+    sampled: {n: 10}                  # the minimum for pass@10 (baseline uses 20)
+
+execute:
+  timeout_s: 10.0
+  workers: 4
+ks: [1, 10]
+out_dir: outputs/eval
