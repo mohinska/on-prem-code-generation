@@ -4,11 +4,12 @@ import sys
 from pathlib import Path
 
 import pytest
-import yaml
 
 from onprem_codegen.data import clean
 from onprem_codegen import utils
+from onprem_codegen.eval.benchmarks import Task
 from onprem_codegen.eval.execute import ExecResult, Status
+from onprem_codegen.data import decontaminate as decon
 from onprem_codegen.data.decontaminate import decontaminate
 from onprem_codegen.data.dedup import exact_dedup, near_dedup
 from onprem_codegen.data.filters import apply_filters
@@ -90,31 +91,80 @@ def test_near_dedup_drops_near_copy_across_sources_and_keeps_distinct():
 
 # --- decontamination
 
-def _bench(tmp_path, prompt):
-    p = tmp_path / "bench.jsonl"
-    p.write_text(json.dumps({"task_id": "CobolEval/0", "prompt": prompt, "tests": [{"test": "TEST-CASE-1"}]}) + "\n")
-    return {"benchmark": str(p), "ngram": 5, "threshold": 0.5}
+def _task(prompt, canonical=None, tests=(), benchmark="fake", mode="completion", tid="t0"):
+    return Task(task_id=f"{benchmark}/{tid}", benchmark=benchmark, mode=mode, lang="cobol", prompt=prompt,
+                entry_point="X", tests=list(tests), canonical_solution=canonical)
 
 
-def test_decontaminate_drops_copy_of_benchmark_prompt(tmp_path):
+@pytest.fixture
+def bench(monkeypatch):
+    """Registers fake benchmarks for decontaminate.load; returns a cfg that uses them."""
+    def register(**tasks):
+        monkeypatch.setattr(decon, "load", lambda name: tasks[name])
+        return {"benchmarks": list(tasks), "ngram": 5, "threshold": 0.5}
+    return register
+
+
+def test_decontaminate_drops_copy_of_benchmark_prompt(bench):
     prompt = _prog("BENCH", 15)
-    cfg = _bench(tmp_path, prompt)
+    cfg = bench(fake=[_task(prompt)])
     leak, clean_ = _row(prompt + "           STOP RUN.\n", path="leak"), _row(_prog("FINE", 15), path="fine")
     contents = {leak.id: prompt + "           STOP RUN.\n", clean_.id: _prog("FINE", 15)}
     rows, report = decontaminate([leak, clean_], contents, cfg)
     r = _by_path(rows)
     assert r["leak"].decontam_hit and not r["leak"].kept and r["leak"].filter_reason == "decontam"
     assert r["fine"].kept and not r["fine"].decontam_hit
-    assert [e["path"] for e in report] == ["leak"] and report[0]["task_id"] == "CobolEval/0"
+    assert [e["path"] for e in report] == ["leak"]
+    assert (report[0]["task_id"], report[0]["benchmark"], report[0]["part"]) == ("fake/t0", "fake", "prompt")
 
 
-def test_decontaminate_ignores_comment_only_differences(tmp_path):
+def test_decontaminate_ignores_comment_only_differences(bench):
     prompt = _prog("BENCH", 15)
-    cfg = _bench(tmp_path, prompt)
+    cfg = bench(fake=[_task(prompt)])
     text = "      * a full-line comment\n" + prompt.replace("\n", " *> trailing\n")
     row = _row(text)
     [out], _ = decontaminate([row], {row.id: text}, cfg)
     assert out.decontam_hit
+
+
+def test_decontaminate_catches_canonical_solution_of_an_instruct_task_in_another_benchmark(bench):
+    solution = _prog("SOLUTION", 15)
+    cfg = bench(a=[_task(_prog("A", 15), benchmark="a")],
+                b=[_task("Write a program that adds numbers and prints the sum, with natural language words only here.",
+                         canonical=solution, benchmark="b", mode="instruct")])
+    row = _row(solution)
+    [out], report = decontaminate([row], {row.id: solution}, cfg)
+    assert out.decontam_hit and (report[0]["benchmark"], report[0]["part"]) == ("b", "canonical_solution")
+
+
+def test_decontaminate_checks_reference_files_of_file_io_tasks(bench):
+    expected = "\n".join(f"ROW {i} TOTAL {i * 7}" for i in range(10))
+    cfg = bench(fake=[_task("p " * 20, tests=[{"input_files": {"in": "x"}, "expected_outputs": {"out.txt": expected}}])])
+    row = _row(expected)
+    [out], report = decontaminate([row], {row.id: expected}, cfg)
+    assert out.decontam_hit and report[0]["part"] == "expected_output"
+
+
+def test_decontaminate_ignores_short_expected_values(bench):
+    cfg = bench(fake=[_task(_prog("BENCH", 15), tests=[{"caller": "C", "expected": "True"}])])
+    row = _row(_prog("OTHER", 15) + "           MOVE True TO X.\n")
+    [out], report = decontaminate([row], {row.id: _prog("OTHER", 15) + "           MOVE True TO X.\n"}, cfg)
+    assert not out.decontam_hit and report == []
+
+
+def test_decontaminate_cli_reports_hits_in_any_jsonl_and_fails_on_them(bench, tmp_path):
+    prompt = _prog("BENCH", 15)
+    cfg = bench(fake=[_task(prompt)])
+    src = tmp_path / "sft.jsonl"
+    src.write_text("\n".join(json.dumps(d) for d in [
+        {"prompt": "write something", "completion": "```cobol\n" + prompt + "```", "task_id": "x/1"},
+        {"prompt": "write other", "completion": _prog("FINE", 15), "task_id": "x/2"}]) + "\n")
+    report = tmp_path / "report.json"
+    assert decon.run(src, report, cfg) == 1
+    rep = json.loads(report.read_text())
+    assert rep["checked"] == 2 and [h["line"] for h in rep["hits"]] == [1] and rep["by_benchmark"] == {"fake": 1}
+    src.write_text(json.dumps({"prompt": "p", "completion": _prog("FINE", 15)}) + "\n")
+    assert decon.run(src, report, cfg) == 0
 
 
 # --- syntax check
@@ -149,11 +199,8 @@ def test_syntax_check_tags_kept_files_and_leaves_the_rest(monkeypatch):
 
 def test_clean_main_filters_dedups_decontaminates_and_never_deletes(tmp_path, monkeypatch):
     shutil.copytree(ROOT / "configs", tmp_path / "configs")
-    bench = tmp_path / "bench.jsonl"
     leak_prompt = _prog("BENCH", 30)
-    bench.write_text(json.dumps({"task_id": "CobolEval/0", "prompt": leak_prompt, "tests": [{"test": "T"}]}) + "\n")
-    dec = tmp_path / "configs/data/decontam.yaml"
-    dec.write_text(yaml.safe_dump({**yaml.safe_load(dec.read_text()), "benchmark": str(bench)}))
+    monkeypatch.setattr(decon, "load", lambda name: [_task(leak_prompt, benchmark=name)])
 
     files = {  # name -> (source, content)
         "good": ("stack_v1", _prog("GOOD", 30)),
@@ -192,6 +239,7 @@ def test_clean_main_filters_dedups_decontaminates_and_never_deletes(tmp_path, mo
     stats = json.loads((out / "stats.json").read_text())
     assert stats["files_in"] == 4 and stats["files_kept"] == 1
     assert stats["by_syntax_check"] == {"ok": 1}
+    assert sum(stats["by_benchmark"].values()) == 1
     assert stats["kept_by_license_ok"] == {"True": 1}  # license is a tag, not a filter
     assert stats["by_reason"] == {"kept": 1, "exact_dup": 1, "too_short": 1, "decontam": 1}
 

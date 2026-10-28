@@ -1,4 +1,5 @@
-# Decontamination against COBOLEval (prompts + COBOL tests). Files above the threshold are dropped;
-benchmark: benchmarks/coboleval/data/CobolEval.jsonl
+# Decontamination against benchmark tasks (prompts, canonical solutions, callers, expected outputs).
+# Texts above the threshold are dropped. HumanEval-Python is not checked (COBOL data only).
+benchmarks: [coboleval, cobolcodebench]   # names for onprem_codegen.eval.benchmarks.load
 ngram: 10            # tokens per shingle, after uppercasing and stripping comments
-threshold: 0.5       # share of a task's shingles found in the file
+threshold: 0.5       # share of a task part's shingles found in the text
