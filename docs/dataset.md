@@ -13,7 +13,7 @@ we use open models only (Qwen itself) because we can't call external APIs.
 ## Skipped
 
 - **Knowledge Q&A (textbooks):** the books are licensed, and the set adds little for code generation.
-- **Synthetic COBOL from Java (Stack v2):** dropped; the paper's ~173K Java→COBOL pairs. Revisit only if the baseline shows data size is the bottleneck.
+- **Synthetic COBOL from Java (Stack v2):** not planned (the paper's ~173K Java→COBOL pairs). Revisit only if the baseline shows data size is the bottleneck.
 - **Translation as a task:** out of scope unless we also evaluate on COBOL-JavaTrans.
 
 ## Always

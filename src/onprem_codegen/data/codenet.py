@@ -30,6 +30,6 @@ def load_codenet(root: str | Path, version: str, out_dir: str | Path, license: s
                 rows.append(ManifestRow(
                     id=h, source="codenet", source_version=version,
                     path=str(p.relative_to(root)), ext=p.suffix.lower(), repo=None, sha256=h, license=license,
-                    license_ok=license is not None,  # ponytail: real license filter lives in clean stage
+                    license_ok=license is not None,  # license is only tagged, not filtered (see licenses.yaml)
                     n_bytes=n))
     return rows

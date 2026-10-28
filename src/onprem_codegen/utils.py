@@ -1,4 +1,5 @@
 import json
+import os
 import subprocess
 from pathlib import Path
 
@@ -8,6 +9,15 @@ def git_commit() -> str | None:
         return subprocess.check_output(["git", "rev-parse", "HEAD"], text=True, stderr=subprocess.DEVNULL).strip()
     except (OSError, subprocess.CalledProcessError):
         return None
+
+
+def init_run(job_type: str, name: str, config: dict):
+    """wandb.init with the project from WANDB_PROJECT, plus git commit and Vast instance ID in the config."""
+    import wandb
+    return wandb.init(
+        project=os.environ.get("WANDB_PROJECT", "onprem-codegen"), job_type=job_type, name=name,
+        config={**config, "git_commit": git_commit() or "",
+                "vast_instance": os.environ.get("CONTAINER_ID") or os.environ.get("VAST_CONTAINERLABEL")})
 
 
 def read_jsonl(path: Path) -> list[dict]:

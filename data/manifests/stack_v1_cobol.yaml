@@ -19,7 +19,7 @@ license:
     - "Use must follow each file's original license, including attribution where required."
     - "Re-download periodically to honor data-removal (opt-out) requests."
     - "Do not redistribute the data in this repo; share only this manifest."
-  verified: false               # TODO: confirm terms text at download time
+  verified: true
 
 download:
   method: datasets.load_dataset
@@ -28,12 +28,12 @@ download:
     ds = load_dataset("bigcode/the-stack", data_dir="data/cobol",
                       split="train", streaming=False)
   target_dir: data/raw/stack_v1_cobol/    # scratch only; the output lives in W&B
-  date_downloaded: null         # TODO
+  date_downloaded: 2026-10-11   # from file mtimes of the raw-corpus export
 
 integrity:
-  num_files: null               # TODO: record after download
-  size_bytes: null              # TODO
-  sha256_of_export: null        # TODO: hash of the exported parquet/jsonl
+  num_files: 3008               # raw-corpus:v0, source=stack_v1
+  size_bytes: 22222909          # sum of file bytes (manifest n_bytes)
+  sha256_of_export: e3efedde45dcfaee06fa8e37dbae9777a2ebee139be36dada977868af562e39f   # raw-corpus/stack_v1/corpus.jsonl
 
 outputs:
   - wandb_artifact: raw-corpus        # source=stack_v1_cobol
