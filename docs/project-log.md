@@ -43,3 +43,10 @@ Running log of decisions, code changes, runs and results (exact numbers). Source
 - CodeNet: 727 accepted COBOL files, 541 kept (too_short 103, near_dup 43, exact_dup 40); kept ones: ok 530, compile_error 11. Licence is `null` in the config, so all 727 count as `license_ok=True` (no licence found); to be confirmed with C.
 - Problems: the first `collect` upload (run `glnvdwp8`) never became a version, probably lost when raw-corpus:v1 (the first, incomplete upload without X-COBOL) was deleted while it was in flight. The local output was logged again as raw-corpus:v2. clean-corpus:v3 and decontam-report:v1 record `raw-corpus:v0` as their input, so their lineage is wrong.
 - CodeNet metadata also holds `problem_list.csv`, which matched the `p*.csv` glob; the old task-pool:v0 counted it as a problem (`problems` 4054, `no_tests` 187, one too many each). task-pool:v1 has the right counts.
+
+### task-pool:v1 (CodeNet problems with I/O tests)
+- What: `make codenet` on `Project_CodeNet.tar.gz` (7.8 GB, streamed, only the COBOL parts, metadata, problem statements and I/O data extracted), commit `e3c6c9a`.
+- Numbers (`stats.json`): 4053 problems, 3867 with tests, 2104 tasks kept. Dropped: has_image 893, non_ascii 862, no_tests 186, too_long 8. One test per task.
+- Archive sha256 `7e96620307f874269a62cc0225f2a5a13d2de2b3c368cf61319c87ec276620fb`, now pinned in `configs/data/codenet_cobol.yaml`.
+- Artifact: `mllab-team/onprem-codegen/task-pool:v1` (alias `latest`); v0 had 4054 problems and 187 `no_tests` (see the note above).
+- The `execute()` contract change (`tests=[]` compiles only) is already in `main` and `origin/main` (merge of `refactor/ponytail-cuts`), so no separate PR is needed.

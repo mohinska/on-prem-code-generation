@@ -2,7 +2,7 @@ name: codenet_cobol
 version: "1.0.0"                     # release dir in the archive URL
 archive:
   url: https://codait-cos-dax.s3.us.cloud-object-storage.appdomain.cloud/dax-project-codenet/1.0.0/Project_CodeNet.tar.gz
-  sha256: null                       # TODO: IBM publishes none; record the value printed on the first download and pin it
+  sha256: 7e96620307f874269a62cc0225f2a5a13d2de2b3c368cf61319c87ec276620fb   # IBM publishes none; recorded on our first download (2026-10-28)
   size: 7.8 GB
 # Only these members are extracted (fnmatch, relative to the archive root); the rest is streamed past.
 extract:
