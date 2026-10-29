@@ -9,7 +9,7 @@ Running log of decisions, code changes, runs and results (exact numbers). Source
 - Numbers (`stats.json`, identical to artifact metadata): 8203 files, 511,066,885 bytes; xcobol 5195, stack_v1 3008.
 - Artifact: `mllab-team/onprem-codegen/raw-corpus:v0` (alias `latest`, 2026-10-11), files `manifest.parquet`, `stats.json`.
 - Run: https://wandb.ai/mllab-team/onprem-codegen/runs/5wwbocha, commit `ac99c4b1e327e1a6ab95eaf16f5c360e637bf34d`.
-- Note: `data/manifests/{stack_v1_cobol,xcobol}.yaml` still have TODO/null fields in this tree; artifact not re-created.
+- The manifests `data/manifests/{stack_v1_cobol,xcobol}.yaml` have no TODO fields any more.
 
 ### cobc flags for the corpus syntax check
 - What: `cobc -fsyntax-only` (GnuCOBOL 3.2.0, `eval-sandbox`, no network) on 50 random non-`.cpy` files from raw-corpus (25 stack_v1, 25 xcobol, seed 0), three flag sets.
@@ -50,3 +50,18 @@ Running log of decisions, code changes, runs and results (exact numbers). Source
 - Archive sha256 `7e96620307f874269a62cc0225f2a5a13d2de2b3c368cf61319c87ec276620fb`, now pinned in `configs/data/codenet_cobol.yaml`.
 - Artifact: `mllab-team/onprem-codegen/task-pool:v1` (alias `latest`); v0 had 4054 problems and 187 `no_tests` (see the note above).
 - The `execute()` contract change (`tests=[]` compiles only) is already in `main` and `origin/main` (merge of `refactor/ponytail-cuts`), so no separate PR is needed.
+
+### data funnel (clean-corpus:v4, by source)
+Rows of `data/raw/clean-corpus/manifest.parquet`, each file counted once by the first step that dropped it (order: filters, decontamination, exact dup, near dup).
+
+| source | in | exact_dup | near_dup | too_short | not_text | high_nonalnum | too_long | decontam | kept |
+|---|---|---|---|---|---|---|---|---|---|
+| stack_v1_cobol | 3008 | 0 | 396 | 540 | 14 | 50 | 0 | 0 | 2008 |
+| xcobol | 5195 | 1452 | 951 | 346 | 174 | 16 | 1 | 0 | 2255 |
+| codenet_cobol | 727 | 40 | 43 | 103 | 0 | 0 | 0 | 0 | 541 |
+| total | 8930 | 1492 | 1390 | 989 | 188 | 66 | 1 | 0 | 4804 |
+
+Stack v1 has no exact duplicates because it wins the exact dedup against X-COBOL (source priority). Of the kept files 218 are `.cpy` copybooks (dependencies, excluded from SFT).
+
+### still missing in this log (owners)
+Baseline eval and SFT results (A, C), rejection-sampling run and `sft-dataset` (C), decontamination of `sft-dataset` (B, after C), CodeNet licence (C), intermediate and final reports.
