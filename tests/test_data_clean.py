@@ -328,7 +328,7 @@ def test_init_run_reads_project_and_vast_instance_from_env(monkeypatch):
     monkeypatch.setitem(sys.modules, "wandb", fake)
     monkeypatch.setenv("WANDB_PROJECT", "proj")
     monkeypatch.setenv("CONTAINER_ID", "123")
-    assert utils.init_run("clean", "n", {"a": 1}) == "run"
+    assert utils.init_run("clean", {"a": 1}, "n") == "run"
     assert calls["project"] == "proj" and calls["job_type"] == "clean"
     assert calls["config"]["a"] == 1 and calls["config"]["vast_instance"] == "123" and "git_commit" in calls["config"]
 

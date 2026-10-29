@@ -19,7 +19,7 @@ from onprem_codegen.data.dedup import exact_dedup, near_dedup
 from onprem_codegen.data.filters import apply_filters
 from onprem_codegen.data.schema import read_manifest, write_manifest
 from onprem_codegen.eval.execute import execute
-from onprem_codegen.utils import git_commit, init_run
+from onprem_codegen.utils import init_run
 
 RAW, OUT = Path("data/raw/raw-corpus"), Path("data/raw/clean-corpus")
 
@@ -28,13 +28,13 @@ def syntax_check(rows, contents, records, timeout_s=30.0, workers=8):
     """Tags kept non-.cpy rows (and their corpus records) with the cobc status; copybooks stay "skipped"."""
     ids = list(dict.fromkeys(r.id for r in rows if r.kept and r.ext != ".cpy"))
     with ThreadPoolExecutor(workers) as pool:
-        results = dict(zip(ids, pool.map(lambda i: execute(contents[i], [], timeout_s=timeout_s), ids)))
-    for i, res in results.items():
-        records[i]["syntax_check"] = {"status": res.status.value, "stderr": res.compile_stderr[:500]}
+        results = list(pool.map(lambda i: execute(contents[i], [], timeout_s=timeout_s), ids))
+    sc = {i: {"status": res.status.value, "stderr": res.compile_stderr[:500]} for i, res in zip(ids, results)}
+    for i, v in sc.items():
+        records[i]["syntax_check"] = v
     for r in rows:
-        if r.id in results and r.kept:
-            sc = records[r.id]["syntax_check"]
-            r.syntax_check, r.syntax_error = sc["status"], sc["stderr"] or None
+        if r.kept and r.id in sc:
+            r.syntax_check, r.syntax_error = sc[r.id]["status"], sc[r.id]["stderr"] or None
     return rows
 
 
@@ -53,7 +53,7 @@ def main() -> None:
     raw = a.raw_dir or RAW
     cfg = {n: yaml.safe_load(Path(f"configs/data/{n}.yaml").read_text()) for n in ("filters", "decontam", "dedup")}
 
-    run = None if a.no_wandb else init_run("clean", f"clean-{(git_commit() or '')[:7]}", cfg)
+    run = None if a.no_wandb else init_run("clean", cfg)
     if run:
         ensure_raw(run, raw)
 
@@ -88,8 +88,7 @@ def main() -> None:
 
     if run:
         import wandb
-        run.summary.update({k: v for k, v in stats.items() if not isinstance(v, dict)})
-        run.summary["by_syntax_check"] = stats["by_syntax_check"]
+        run.summary.update(stats)
         art = wandb.Artifact("clean-corpus", type="dataset", metadata=stats)
         art.add_dir(str(OUT))
         run.log_artifact(art)

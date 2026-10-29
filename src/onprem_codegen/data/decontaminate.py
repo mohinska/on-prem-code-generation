@@ -34,9 +34,6 @@ def _parts(t):
     """(name, text) of everything in a task that must not leak into training data."""
     yield "prompt", t.prompt
     yield "canonical_solution", t.canonical_solution
-    if isinstance(t.tests, str):
-        yield "tests", t.tests
-        return
     for x in t.tests:
         yield "caller", x.get("caller")
         yield "expected", x.get("expected")
@@ -104,7 +101,7 @@ ALIAS = "decontaminated"  # what configs/train/sft.yaml pulls
 def check_artifact(art, cfg: dict, report_path: Path) -> int:
     """Checks the sft.jsonl of a sft-dataset version; adds the `decontaminated` alias to it only if there are no hits."""
     rc = run(Path(art.download()) / "sft.jsonl", report_path, cfg)
-    if rc == 0 and ALIAS not in art.aliases:
+    if rc == 0:
         art.aliases.append(ALIAS)
         art.save()
     return rc
@@ -122,7 +119,7 @@ def main() -> None:
 
     import wandb
     from onprem_codegen.utils import init_run
-    with init_run("decontaminate", f"decontaminate-{a.artifact.replace(':', '-')}", cfg) as r:
+    with init_run("decontaminate", cfg, f"decontaminate-{a.artifact.replace(':', '-')}") as r:
         r.use_artifact(a.artifact)  # lineage
         api_art = wandb.Api().artifact(f"{r.entity}/{r.project}/{a.artifact}")
         rc = check_artifact(api_art, cfg, a.report)

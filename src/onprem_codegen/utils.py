@@ -11,12 +11,13 @@ def git_commit() -> str | None:
         return None
 
 
-def init_run(job_type: str, name: str, config: dict):
+def init_run(job_type: str, config: dict, name: str | None = None):
     """wandb.init with the project from WANDB_PROJECT, plus git commit and Vast instance ID in the config."""
     import wandb
+    commit = git_commit() or ""
     return wandb.init(
-        project=os.environ.get("WANDB_PROJECT", "onprem-codegen"), job_type=job_type, name=name,
-        config={**config, "git_commit": git_commit() or "",
+        project=os.environ.get("WANDB_PROJECT", "onprem-codegen"), job_type=job_type, name=name or f"{job_type}-{commit[:7]}",
+        config={**config, "git_commit": commit,
                 "vast_instance": os.environ.get("CONTAINER_ID") or os.environ.get("VAST_CONTAINERLABEL")})
 
 
