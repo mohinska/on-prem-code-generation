@@ -15,12 +15,12 @@ source:
   archives:                     # URL from the project README; IBM publishes no checksum
     - name: Project_CodeNet.tar.gz              # full dataset (7.8 GB): data/, metadata/, problem_descriptions/, derived/
       url: https://codait-cos-dax.s3.us.cloud-object-storage.appdomain.cloud/dax-project-codenet/1.0.0/Project_CodeNet.tar.gz
-      sha256: null              # TODO: download_codenet.py prints it on the first download; pin it here and in configs/data/codenet_cobol.yaml
+      sha256: 7e96620307f874269a62cc0225f2a5a13d2de2b3c368cf61319c87ec276620fb   # first download, same pin as configs/data/codenet_cobol.yaml
   parts_used:
     - "problem_descriptions/<problem_id>.html"
     - "metadata/<problem_id>.csv (status, language, submission id)"
     - "data/<problem_id>/COBOL/<submission_id>.cbl"
-    - "derived/input_output/data/<problem_id>/{input,output}.txt"   # TODO: verify path and coverage
+    - "derived/input_output/data/<problem_id>/{input,output}.txt"   # verified: 3867 of 4053 problems, one input/output pair each
   version: "1.0.0"              # release dir in the URL
   alternative:
     repo: iNeil77/CodeNet       # HF mirror, COBOL code only (~296 kB); no descriptions, status or tests
@@ -34,13 +34,15 @@ download:
   method: custom_script
   script: src/onprem_codegen/data/download_codenet.py   # streams the archive, extracts only the parts above
   target_dir: data/raw/codenet_cobol/    # scratch only; the output lives in W&B
-  date_downloaded: null         # TODO
+  date_downloaded: 2026-10-28
 
-integrity:                      # copy from data/raw/task-pool/stats.json after the first run
-  num_problems_with_tests: null # TODO
-  num_cobol_submissions: null   # TODO
-  num_cobol_accepted: null      # TODO
-  sha256_of_export: null        # TODO
+integrity:                      # task-pool:v1 stats.json, metadata/p*.csv and raw-corpus:v2
+  num_problems: 4053
+  num_problems_with_tests: 3867
+  num_tasks: 2104               # task-pool:v1 after filters
+  num_cobol_submissions: 1277   # metadata rows with language COBOL, any status
+  num_cobol_accepted: 727       # status Accepted, = raw-corpus:v2 source=codenet_cobol
+  sha256_of_export: cee03b211fa7e10c0d807e334395e340771a79e5d3542f0b822ec9425028eed6   # raw-corpus:v2 codenet/corpus.jsonl
 
 outputs:
   - wandb_artifact: raw-corpus            # accepted COBOL submissions, source=codenet_cobol
