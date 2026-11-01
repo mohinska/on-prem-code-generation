@@ -63,5 +63,12 @@ Rows of `data/raw/clean-corpus/manifest.parquet`, each file counted once by the 
 
 Stack v1 has no exact duplicates because it wins the exact dedup against X-COBOL (source priority). Of the kept files 218 are `.cpy` copybooks (dependencies, excluded from SFT).
 
+### rejection sampling smoke (20 tasks, no W&B)
+- What: `make sft-data ARGS="--task-pool <task-pool:v1>/task_pool.jsonl --limit 20 --no-wandb --out data/raw/sft-dataset-smoke"`, commit `dc9dfc4`, `configs/data/rejection_sampling.yaml` as is (n 16, temperature 0.7, top_p 0.8, max_tokens 2048, non-thinking). Generation on Vast (1× H100 NVL, image `vllm/vllm-openai:latest` = vLLM 0.32.0, through the SSH tunnel), execution locally in `eval-sandbox` (GnuCOBOL 3.2.0). First 20 tasks of task-pool:v1.
+- Numbers: 320 samples, 1 of 20 tasks solved (solve_rate 0.05), sample_pass_rate 0.0063, 2 sft rows. By status: compile_error 280, runtime_error 13, wrong_output 10, no_program 15 (all 15 truncated at max_tokens), ok 2.
+- Main cause: 242 of 305 extracted programs read stdin through file I/O (`SELECT ... ASSIGN TO STDIN`), and 227 of those fail to compile; 34 samples use reserved words as data names (`COUNT`, `NUMBERS`). Hence `IO_STDIN` in `prompt.py` now asks for ACCEPT and DISPLAY (used only for task-pool / SFT data, eval prompts are unchanged).
+- Sandbox check: 38 of the first 40 accepted CodeNet submissions with a task pass the task-pool:v1 tests in `eval-sandbox` (2 compile errors: free format, invalid indicator column), ≈0.35 s per program.
+- vLLM 0.32.0 on this model fails at startup with the default `max_num_seqs` 1024 ("exceeds available Mamba cache blocks (626)" at `--max-model-len 8192`, `--gpu-memory-utilization 0.92`); `--max-num-seqs 256` works (rejection sampling needs at most concurrency 8 × n 16 = 128). The `vllm/vllm-openai` image has no `/workspace`, so the onstart command must create it.
+
 ### still missing in this log (owners)
 Baseline eval and SFT results (A, C), rejection-sampling run and `sft-dataset` (C), decontamination of `sft-dataset` (B, after C), CodeNet licence (C), intermediate and final reports.
