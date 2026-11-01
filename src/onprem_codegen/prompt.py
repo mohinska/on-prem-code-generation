@@ -7,7 +7,7 @@ Only the I/O sentence depends on the task: stdin/stdout for task-pool (SFT data,
 and one sentence per benchmark whose programs do I/O differently (IO_* below).
 """
 
-IO_STDIN = "Read input from standard input and write the\nresult to standard output."
+IO_STDIN = "Read input from standard input with ACCEPT and write the result to standard output with DISPLAY."
 IO_COBOLEVAL = ("Complete the program above: keep its PROGRAM-ID and LINKAGE SECTION unchanged\n"
                 "and store the answer in RESULT.")
 IO_FILES = "Read input from the files named above and write the results to the output files named above."

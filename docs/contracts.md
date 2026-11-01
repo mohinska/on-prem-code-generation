@@ -103,8 +103,7 @@ vs adapted comparison meaningless.
 ```text
 {task_text}
 
-Write a complete GnuCOBOL program in fixed format. Read input from standard input and write the
-result to standard output. Answer with a single ```cobol code block.
+Write a complete GnuCOBOL program in fixed format. Read input from standard input with ACCEPT and write the result to standard output with DISPLAY. Answer with a single ```cobol code block.
 ```
 
 - **I/O sentence:** the second sentence depends on how the task does I/O; everything else is fixed.

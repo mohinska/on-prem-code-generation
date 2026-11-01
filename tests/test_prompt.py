@@ -6,8 +6,8 @@ from onprem_codegen.prompt import build_messages, build_prompt, instruction
 def test_matches_contract_text():
     assert build_prompt("Add two numbers.") == (
         "Add two numbers.\n\n"
-        "Write a complete GnuCOBOL program in fixed format. Read input from standard input and write the\n"
-        "result to standard output. Answer with a single ```cobol code block."
+        "Write a complete GnuCOBOL program in fixed format. Read input from standard input with ACCEPT and write the "
+        "result to standard output with DISPLAY. Answer with a single ```cobol code block."
     )
 
 
