@@ -9,6 +9,9 @@ onprem_codegen/eval/run.py — eval: generate -> execute -> metrics -> W&B.
     python -m onprem_codegen.eval.run --stage execute \\
         --generations eval-generations:baseline                              # locally, in the sandbox
 
+    # one mode at a time into the same run (non-thinking is fast, thinking is the long run)
+    python -m onprem_codegen.eval.run --stage generate --modes non_thinking
+
 Both stages append to jsonl files under <out_dir>/<run_name>/ and skip finished work, so a crashed or
 interrupted run resumes where it stopped. Generations are raw model output; the program is extracted
 and assembled at execution time (eval/generate.py), so a fix there needs no new generations.
@@ -247,12 +250,16 @@ def main() -> None:
     ap.add_argument("--generations", help="execute stage: W&B artifact (name:alias) or local generations.jsonl")
     ap.add_argument("--run-name", help="overrides run_name (and the output folder)")
     ap.add_argument("--limit", type=int, help="only the first N tasks of every benchmark / task mode")
+    ap.add_argument("--modes", nargs="+", choices=["non_thinking", "thinking"],
+                    help="overrides modes; same run_name later resumes with the other mode")
     ap.add_argument("--no-wandb", action="store_true")
     a = ap.parse_args()
 
     cfg = yaml.safe_load(Path(a.config).read_text(encoding="utf-8"))
     if a.run_name:
         cfg["run_name"] = a.run_name
+    if a.modes:
+        cfg["modes"] = a.modes
     out = Path(cfg["out_dir"]) / cfg["run_name"]
     out.mkdir(parents=True, exist_ok=True)
     tasks = load_tasks(cfg, a.limit)
