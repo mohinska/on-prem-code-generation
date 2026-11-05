@@ -13,6 +13,7 @@ sampling:                             # non-thinking, like the SFT data itself (
   temperature: 0.7                    # = benchmarks.yaml non_thinking.sampled
   top_p: 0.8
   max_tokens: 2048
+max_score: 500                        # generate only for AtCoder tasks up to this score; human rows still use every task; null = all
 concurrency: 16                       # tasks in flight at once; n × 16 = 256 = --max-num-seqs (needs a large GPU)
 # Appended to the request only, not to the sft-dataset prompt. Targets the top compile errors of the 20-task smoke.
 generation_hints: >-

@@ -65,6 +65,13 @@ def test_generation_hints_reach_the_model_but_not_the_saved_prompt(monkeypatch):
     assert ok["prompt"] == build_prompt("Print A+B.")
 
 
+def test_worth_sampling_by_score():
+    assert rs.worth_sampling({"prompt": "Score : 300 points\n\nProblem"}, 500)
+    assert not rs.worth_sampling({"prompt": "Score : 600 points\n\nProblem"}, 500)
+    assert not rs.worth_sampling({"prompt": "Reverse Sequence"}, 500)
+    assert rs.worth_sampling({"prompt": "Reverse Sequence"}, None)
+
+
 def test_run_program_maps_tests_to_execute(monkeypatch):
     seen = {}
 

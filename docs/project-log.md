@@ -53,5 +53,17 @@ Base `931124b` plus `generation_hints` in `configs/data/rejection_sampling.yaml`
 - 59 wrong_output of the third set re-run in `eval-sandbox`: 31 wrong values, 14 empty output, 7 different token count, 7 format only (leading zeros, spaces).
 - Chat template ruled out: the prompt rendered by the server is identical to `apply_chat_template` of `Qwen/Qwen3.8-27B` with `enable_thinking=False`, and `train/sft.py` uses the same.
 
+### rejection sampling: yield by task difficulty
+Commit `f84ab46`, generation_hints above, H200 NVL (Vast 59224690), concurrency 16, no W&B. `task-pool:v1` is ordered by problem id: AOJ problems first, AtCoder later; 288 of the 295 tasks with a human solution are AtCoder tasks of at most 500 points. The first 20 tasks are among the easiest, so the 5 of 20 above overestimates the pool.
+
+| Tasks | Tasks solved | ok | compile_error | wrong_output | timeout | runtime_error | no_program (truncated) | sft rows |
+|---|---|---|---|---|---|---|---|---|
+| first 500 (positions 0-499) | 17 of 500 | 44 | 3082 | 324 | 43 | 2 | 4505 (4487) | 29 |
+| 40 random of the other 1604 (seed 0) | 5 of 40 | 20 | 418 | 55 | 1 | 0 | 146 (146) | 13 |
+
+- First 500 by position: 0-99 has 39 ok, 100-499 has 5 ok. On hard tasks the model often declares variables one by one (`WS-ITEM80`, `WS-ITEM81`) until `max_tokens`.
+- The 40 by AtCoder score: ≤ 300 points 4 of 18 tasks (19 ok), 400-500 points 1 of 9 (1 ok), ≥ 600 points 0 of 8, no score 0 of 5.
+- Hence `max_score: 500` in `configs/data/rejection_sampling.yaml`: generation runs only for AtCoder tasks up to 500 points; human rows still use every task.
+
 ### still missing
 Baseline eval and SFT results (A, C), full rejection-sampling run and `sft-dataset` (C), decontamination of `sft-dataset` (B), CodeNet licence (C), reports.

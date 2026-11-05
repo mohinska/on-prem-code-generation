@@ -46,6 +46,14 @@ def is_hardcoded(program: str, tests: list[dict]) -> bool:
     return True
 
 
+def worth_sampling(task: dict, max_score: int | None) -> bool:
+    """AtCoder tasks up to max_score; harder ones and tasks without a score (AOJ) almost never yield a passing program."""
+    if max_score is None:
+        return True
+    m = re.match(r"Score\s*:\s*(\d+)", task["prompt"])
+    return bool(m) and int(m.group(1)) <= max_score
+
+
 def sample_task(task: dict, client, cfg: dict) -> list[dict]:
     rows = []
     messages = build_messages(task["prompt"])
@@ -133,7 +141,7 @@ def main() -> None:
     client = VllmClient(srv["base_url"], srv["model"], srv["request_timeout_s"])
     samples_path = out / "samples.jsonl"
     done = {s["task_id"] for s in read_jsonl(samples_path)}
-    todo = [t for tid, t in tasks.items() if tid not in done]
+    todo = [t for tid, t in tasks.items() if tid not in done and worth_sampling(t, cfg.get("max_score"))]
     print(f"{len(tasks)} tasks, {len(done)} already sampled, {len(todo)} to go")
 
     with open(samples_path, "a") as f, ThreadPoolExecutor(cfg["concurrency"]) as pool_ex:
@@ -155,7 +163,8 @@ def main() -> None:
         for r in rows:
             f.write(json.dumps(r) + "\n")
     solved = {s["task_id"] for s in samples if s["status"] == "ok"}
-    stats = {"tasks": len(tasks), "samples": len(samples), "tasks_solved": len(solved),
+    stats = {"tasks": len(tasks), "tasks_sampled": len({s["task_id"] for s in samples}), "samples": len(samples),
+             "tasks_solved": len(solved),
              "solve_rate": round(len(solved) / max(len(tasks), 1), 4),
              "sample_pass_rate": round(sum(s["status"] == "ok" for s in samples) / max(len(samples), 1), 4),
              "sft_rows": len(rows), "sft_tasks": len({r["task_id"] for r in rows}),
