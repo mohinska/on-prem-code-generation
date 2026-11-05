@@ -63,7 +63,7 @@ Commit `f84ab46`, generation_hints above, H200 NVL (Vast 59224690), concurrency 
 
 - First 500 by position: 0-99 has 39 ok, 100-499 has 5 ok. On hard tasks the model often declares variables one by one (`WS-ITEM80`, `WS-ITEM81`) until `max_tokens`.
 - The 40 by AtCoder score: ≤ 300 points 4 of 18 tasks (19 ok), 400-500 points 1 of 9 (1 ok), ≥ 600 points 0 of 8, no score 0 of 5.
-- Hence `max_score: 500` in `configs/data/rejection_sampling.yaml`: generation runs only for AtCoder tasks up to 500 points; human rows still use every task.
+- Order of generation: AtCoder tasks up to 500 points (`max_score: 500`), then `--second-pass` (16 more samples) on the unsolved tasks up to 300 points, then all other tasks (`max_score: null`). Human rows use every task.
 
 ### still missing
 Baseline eval and SFT results (A, C), full rejection-sampling run and `sft-dataset` (C), decontamination of `sft-dataset` (B), CodeNet licence (C), reports.

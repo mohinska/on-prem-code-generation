@@ -1,6 +1,6 @@
 """Step 3: task-pool -> n samples per task on A's vLLM server -> run_program -> sft-dataset (status ok only).
 
-    python -m onprem_codegen.data.rejection_sampling [--task-pool PATH] [--clean-corpus DIR] [--limit N] [--no-wandb]
+    python -m onprem_codegen.data.rejection_sampling [--task-pool PATH] [--clean-corpus DIR] [--limit N] [--second-pass] [--no-wandb]
 
 Runs where both the server (SSH tunnel to localhost:8000) and the eval sandbox are reachable; Vast has no Docker.
 Needs the image from `docker compose build eval-sandbox` (or EXECUTE_BACKEND=local on a disposable host).
@@ -54,12 +54,22 @@ def worth_sampling(task: dict, max_score: int | None) -> bool:
     return bool(m) and int(m.group(1)) <= max_score
 
 
-def sample_task(task: dict, client, cfg: dict) -> list[dict]:
+def select_todo(tasks: dict, samples: list[dict], cfg: dict, second_pass: bool) -> list[dict]:
+    """Tasks without samples, or with second_pass the easy tasks whose n samples all failed (more than n: already done)."""
+    seen = collections.Counter(s["task_id"] for s in samples)
+    if not second_pass:
+        return [t for tid, t in tasks.items() if not seen[tid] and worth_sampling(t, cfg.get("max_score"))]
+    solved = {s["task_id"] for s in samples if s["status"] == "ok"}
+    return [t for tid, t in tasks.items() if seen[tid] == cfg["sampling"]["n"] and tid not in solved
+            and worth_sampling(t, cfg["second_pass_max_score"])]
+
+
+def sample_task(task: dict, client, cfg: dict, start_idx: int = 0) -> list[dict]:
     rows = []
     messages = build_messages(task["prompt"])
     if cfg.get("generation_hints"):  # only sent to the model; the saved prompt stays build_prompt, same as eval
         messages[0]["content"] += "\n\n" + cfg["generation_hints"]
-    for i, g in enumerate(client.generate(messages, cfg["sampling"], False)):
+    for i, g in enumerate(client.generate(messages, cfg["sampling"], False), start_idx):
         gen, finish = g["content"], g["finish_reason"]
         prog = extract_program(gen)
         res = (run_program(prog, task["tests"], cfg["execute"]["timeout_s"]) if prog
@@ -122,6 +132,7 @@ def main() -> None:
     ap.add_argument("--clean-corpus", help="local clean-corpus dir instead of the W&B artifact")
     ap.add_argument("--limit", type=int, help="only the first N tasks")
     ap.add_argument("--out", default=str(OUT))
+    ap.add_argument("--second-pass", action="store_true", help="n more samples for unsolved tasks up to second_pass_max_score")
     ap.add_argument("--no-wandb", action="store_true")
     a = ap.parse_args()
     cfg = yaml.safe_load(CFG.read_text())
@@ -140,12 +151,13 @@ def main() -> None:
     srv = cfg["server"]
     client = VllmClient(srv["base_url"], srv["model"], srv["request_timeout_s"])
     samples_path = out / "samples.jsonl"
-    done = {s["task_id"] for s in read_jsonl(samples_path)}
-    todo = [t for tid, t in tasks.items() if tid not in done and worth_sampling(t, cfg.get("max_score"))]
-    print(f"{len(tasks)} tasks, {len(done)} already sampled, {len(todo)} to go")
+    prior = read_jsonl(samples_path)
+    todo = select_todo(tasks, prior, cfg, a.second_pass)
+    print(f"{len(tasks)} tasks, {len({s['task_id'] for s in prior})} already sampled, {len(todo)} to go")
+    start_idx = cfg["sampling"]["n"] if a.second_pass else 0
 
     with open(samples_path, "a") as f, ThreadPoolExecutor(cfg["concurrency"]) as pool_ex:
-        futures = [pool_ex.submit(sample_task, t, client, cfg) for t in todo]
+        futures = [pool_ex.submit(sample_task, t, client, cfg, start_idx) for t in todo]
         for k, fut in enumerate(as_completed(futures), 1):
             f.write("".join(json.dumps(s) + "\n" for s in fut.result()))  # one write per task
             f.flush()

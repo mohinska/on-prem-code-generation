@@ -72,6 +72,26 @@ def test_worth_sampling_by_score():
     assert rs.worth_sampling({"prompt": "Reverse Sequence"}, None)
 
 
+def test_select_todo_and_second_pass():
+    def task(tid, score):
+        return {"task_id": tid, "prompt": f"Score : {score} points\n\nProblem"}
+
+    def samples(tid, n, status="wrong_output"):
+        return [{"task_id": tid, "sample_idx": i, "status": status} for i in range(n)]
+
+    tasks = {t["task_id"]: t for t in (task("new", 100), task("failed", 100), task("solved", 100), task("hard", 600),
+                                       task("again", 100))}
+    prior = samples("failed", 16) + samples("solved", 16, "ok") + samples("hard", 16) + samples("again", 32)
+    cfg = {"sampling": {"n": 16}, "max_score": None, "second_pass_max_score": 300}
+    assert [t["task_id"] for t in rs.select_todo(tasks, prior, cfg, False)] == ["new"]
+    assert [t["task_id"] for t in rs.select_todo(tasks, prior, cfg, True)] == ["failed"]
+
+
+def test_sample_task_start_idx(monkeypatch):
+    monkeypatch.setattr(rs, "run_program", lambda prog, tests, timeout: {"status": "ok", "stderr": "", "duration_s": 0.1})
+    assert [s["sample_idx"] for s in rs.sample_task(TASK, FakeClient(), CFG, 16)] == [16, 17]
+
+
 def test_run_program_maps_tests_to_execute(monkeypatch):
     seen = {}
 
