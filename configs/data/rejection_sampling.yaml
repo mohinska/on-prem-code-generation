@@ -30,3 +30,5 @@ execute:
 keep:
   max_per_task: 4                     # distinct passing programs per task, so easy tasks don't dominate
   drop_hardcoded_output: true         # with 1-2 sample tests, DISPLAY of the expected number is a cheat
+  min_tests: 2                        # generated programs only: one passed test says little (35% failed the next samples)
+  max_score: 500                      # generated programs only: above this, programs that pass the samples read as too-simple rules or brute force
