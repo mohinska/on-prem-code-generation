@@ -9,7 +9,7 @@ adapter: null                         # W&B artifact of the LoRA adapter served 
 server:
   base_url: http://localhost:8000/v1  # vLLM OpenAI API through the SSH tunnel; env VLLM_BASE_URL overrides
   model: base                         # served model name (serve-entrypoint.sh): base | cobol
-  request_timeout_s: 1800             # thinking mode with n=20 is slow
+  request_timeout_s: 14400            # thinking: n=20 answers up to ~28k tokens each, plus queueing
   concurrency: 8                      # requests in flight
 
 benchmarks:                           # benchmark: task modes

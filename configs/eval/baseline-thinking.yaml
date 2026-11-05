@@ -1,0 +1,29 @@
+# Baseline, thinking mode, cut down: COBOLEval only, 10 samples per task (instead of 20).
+# Full thinking on all benchmarks with n=20 was ~4.5 days on 1x A100 (answers average ~21k tokens).
+# Non-thinking baseline (all benchmarks, full protocol) is in run "baseline".
+#   python -m onprem_codegen.eval.run --config configs/eval/baseline-thinking.yaml --stage generate
+run_name: baseline-thinking
+model_name: Qwen/Qwen3.8-27B
+adapter: null
+
+server:
+  base_url: http://localhost:8000/v1
+  model: base
+  request_timeout_s: 14400            # n=10 answers up to ~28k tokens each, plus queueing
+  concurrency: 8
+
+benchmarks:
+  coboleval: [completion]
+modes: [thinking]
+decodings: [greedy, sampled]          # thinking has no greedy in the manifest, so only sampled runs
+seed: 1234
+
+protocol_overrides:                   # applied on top of evaluation_protocol in benchmarks.yaml
+  thinking:
+    sampled: {n: 10}                  # the minimum for pass@10
+
+execute:
+  timeout_s: 10.0
+  workers: 4
+ks: [1, 10]
+out_dir: outputs/eval

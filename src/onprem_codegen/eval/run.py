@@ -115,12 +115,21 @@ def generate(cfg: dict, tasks: dict, out: Path) -> Path:
         return rows
 
     with open(path, "a", encoding="utf-8") as f, ThreadPoolExecutor(cfg["server"]["concurrency"]) as pool:
-        futures = [pool.submit(one, *u) for u in units]
+        futures = {pool.submit(one, *u): u[0] for u in units}
+        failed = 0
         for k, fut in enumerate(as_completed(futures), 1):
-            f.write("".join(json.dumps(r, ensure_ascii=False) + "\n" for r in fut.result()))   # one write per request
+            try:
+                rows = fut.result()
+            except Exception as e:   # e.g. a timeout: skip it, a re-run retries the missing request
+                failed += 1
+                print(f"  failed {futures[fut]}: {type(e).__name__}: {e}")
+                continue
+            f.write("".join(json.dumps(r, ensure_ascii=False) + "\n" for r in rows))   # one write per request
             f.flush()
-            if k % 50 == 0 or k == len(futures):
+            if k % 10 == 0 or k == len(futures):
                 print(f"  {k}/{len(futures)} requests")
+    if failed:
+        print(f"generate: {failed} requests failed; run the same command again to retry them")
     return path
 
 
