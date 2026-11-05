@@ -48,7 +48,10 @@ def is_hardcoded(program: str, tests: list[dict]) -> bool:
 
 def sample_task(task: dict, client, cfg: dict) -> list[dict]:
     rows = []
-    for i, g in enumerate(client.generate(build_messages(task["prompt"]), cfg["sampling"], False)):
+    messages = build_messages(task["prompt"])
+    if cfg.get("generation_hints"):  # only sent to the model; the saved prompt stays build_prompt, same as eval
+        messages[0]["content"] += "\n\n" + cfg["generation_hints"]
+    for i, g in enumerate(client.generate(messages, cfg["sampling"], False)):
         gen, finish = g["content"], g["finish_reason"]
         prog = extract_program(gen)
         res = (run_program(prog, task["tests"], cfg["execute"]["timeout_s"]) if prog

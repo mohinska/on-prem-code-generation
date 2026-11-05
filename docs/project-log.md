@@ -38,5 +38,20 @@ Commit `dc9dfc4`, `configs/data/rejection_sampling.yaml` (n 16, temperature 0.7,
 - Sandbox check: 38 of 40 accepted CodeNet submissions pass the task-pool tests.
 - vLLM needs `--max-num-seqs 256`; the default 1024 fails at startup on Mamba cache blocks.
 
+### rejection sampling: generation hints (same 20 tasks, no W&B)
+Base `931124b` plus `generation_hints` in `configs/data/rejection_sampling.yaml`: appended to the request only, the `sft-dataset` prompt stays `build_prompt` (0 of 15 rows contain a hint). n 16, temperature 0.7, top_p 0.8, max_tokens 2048, non-thinking, vLLM `--max-model-len 8192 --max-num-seqs 256`. Each hint set is cumulative.
+
+| Hints | GPU (Vast instance), concurrency | Tasks solved | ok | compile_error | wrong_output | runtime_error | timeout | no_program | Wall time |
+|---|---|---|---|---|---|---|---|---|---|
+| none | RTX PRO 6000 S (59220542), 8 | 1 | 1 | 263 | 28 | 5 | 2 | 21 | 4:10 |
+| WORKING-STORAGE spelling, `WS-` names, columns 8-72 | RTX PRO 6000 S (59220542), 8 | 3 | 6 | 242 | 43 | 3 | 5 | 21 | 4:11 |
+| + no SELECT, FD or files | RTX PRO 6000 S (59220542), 8 | 2 | 4 | 228 | 59 | 0 | 10 | 19 | 4:10 |
+| + numbers without leading zeros, spaces or plus signs (`PIC Z(17)9`, `FUNCTION TRIM`) | H200 NVL (59224690), 16 | 5 | 16 | 226 | 47 | 0 | 7 | 24 | 1:42 |
+
+- All 320 samples per run. The C1 gate (≥ 4 of 20 tasks, compile_error clearly below 280) passes with the last set: 15 sft rows from 5 tasks, 0 hardcoded, 0 programs with files.
+- Without hints: 39 programs write `WORKING-STORE`, 26 fail first on a reserved data name (`NUMBERS`, `COUNT`). With the first set: 0 `WORKING-STORE`, but 105 of 299 programs use files, 100 of them don't compile and none pass.
+- 59 wrong_output of the third set re-run in `eval-sandbox`: 31 wrong values, 14 empty output, 7 different token count, 7 format only (leading zeros, spaces).
+- Chat template ruled out: the prompt rendered by the server is identical to `apply_chat_template` of `Qwen/Qwen3.8-27B` with `enable_thinking=False`, and `train/sft.py` uses the same.
+
 ### still missing
 Baseline eval and SFT results (A, C), full rejection-sampling run and `sft-dataset` (C), decontamination of `sft-dataset` (B), CodeNet licence (C), reports.

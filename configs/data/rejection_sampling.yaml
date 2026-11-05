@@ -13,7 +13,15 @@ sampling:                             # non-thinking, like the SFT data itself (
   temperature: 0.7                    # = benchmarks.yaml non_thinking.sampled
   top_p: 0.8
   max_tokens: 2048
-concurrency: 8                        # tasks in flight at once
+concurrency: 16                       # tasks in flight at once; n × 16 = 256 = --max-num-seqs (needs a large GPU)
+# Appended to the request only, not to the sft-dataset prompt. Targets the top compile errors of the 20-task smoke.
+generation_hints: >-
+  Rules: write the section name exactly as WORKING-STORAGE SECTION.
+  Start every data name with WS- because names like COUNT or NUMBERS are reserved words.
+  Keep every line within columns 8-72.
+  Do not use SELECT, FD or any files.
+  Output must match the samples exactly, so print numbers without leading zeros, spaces or plus signs:
+  MOVE them to a field like PIC Z(17)9 and DISPLAY FUNCTION TRIM(field).
 
 execute:
   timeout_s: 10.0

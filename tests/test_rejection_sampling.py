@@ -51,6 +51,20 @@ def test_sample_task_statuses(monkeypatch):
     assert ok["prompt"] == build_prompt("Print A+B.") and ok["hardcoded"] is False
 
 
+def test_generation_hints_reach_the_model_but_not_the_saved_prompt(monkeypatch):
+    monkeypatch.setattr(rs, "run_program", lambda prog, tests, timeout: {"status": "ok", "stderr": "", "duration_s": 0.1})
+    seen = {}
+
+    class Client(FakeClient):
+        def generate(self, messages, sampling, thinking):
+            seen["content"] = messages[0]["content"]
+            return super().generate(messages, sampling, thinking)
+
+    ok, _ = rs.sample_task(TASK, Client(), {**CFG, "generation_hints": "Use WS- names."})
+    assert seen["content"] == build_prompt("Print A+B.") + "\n\nUse WS- names."
+    assert ok["prompt"] == build_prompt("Print A+B.")
+
+
 def test_run_program_maps_tests_to_execute(monkeypatch):
     seen = {}
 
