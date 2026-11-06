@@ -30,6 +30,7 @@ lora:
 data:
   # W&B artifact with a prompt/completion JSONL; upload with `wandb artifact put` (README, Vast.ai smoke test).
   artifact: sft-smoke-data:latest
+  eval_fraction: 0.1          # share of tasks held out for eval/loss (rows without task_id: share of rows)
 
 train:
   output_dir: checkpoints/${run_name}

@@ -8,6 +8,7 @@ Restartable: checkpoints are mirrored to W&B, so a fresh instance resumes from t
 
 import math
 import os
+import random
 import time
 from pathlib import Path
 
@@ -52,6 +53,26 @@ def to_prompt_completion(tok, example: dict) -> dict:
     )
     assert full.startswith(prompt), "chat template: prompt is not a prefix of the full conversation"
     return {"prompt": prompt, "completion": full[len(prompt):]}
+
+
+def split_indices(task_ids: list, eval_fraction: float, seed: int) -> tuple[list[int], list[int]]:
+    """Hold out whole tasks (rows without task_id count as one task each), seeded."""
+    groups: dict[tuple, list[int]] = {}
+    for i, t in enumerate(task_ids):
+        groups.setdefault((0, t) if t is not None else (1, i), []).append(i)
+    keys = sorted(groups)
+    random.Random(seed).shuffle(keys)
+    n_eval = min(max(1, round(len(keys) * eval_fraction)), len(keys) - 1) if eval_fraction > 0 else 0
+    ev = sorted(i for k in keys[:n_eval] for i in groups[k])
+    held = set(ev)
+    return [i for i in range(len(task_ids)) if i not in held], ev
+
+
+def drop_overlength(ds, tok, max_length: int):
+    """Drop (not truncate) rows whose prompt + completion exceed max_length tokens; returns (dataset, n_dropped)."""
+    ids = tok([p + c for p, c in zip(ds["prompt"], ds["completion"])])["input_ids"]
+    keep = [i for i, x in enumerate(ids) if len(x) <= max_length]
+    return ds.select(keep), len(ds) - len(keep)
 
 
 class MirrorCheckpoints(TrainerCallback):
@@ -120,7 +141,16 @@ def main(cfg: DictConfig) -> None:
     model = load_model(cfg, cfg.model.name)
 
     ds = load_dataset("json", data_files=str(Path(data_dir) / "sft.jsonl"), split="train")
-    ds = ds.map(lambda ex: to_prompt_completion(tok, ex), remove_columns=ds.column_names)
+    # Split by task before rendering (rendering drops task_id), then drop over-length rows from both parts.
+    task_ids = ds["task_id"] if "task_id" in ds.column_names else [None] * len(ds)
+    train_idx, eval_idx = split_indices(task_ids, cfg.data.eval_fraction, cfg.seed)
+    parts = [ds.select(idx) for idx in (train_idx, eval_idx)]
+    parts = [p.map(lambda ex: to_prompt_completion(tok, ex), remove_columns=p.column_names) for p in parts]
+    (ds, dropped_train), (eval_ds, dropped_eval) = (drop_overlength(p, tok, cfg.train.max_length) for p in parts)
+    eval_ds = eval_ds if len(eval_ds) else None
+    run.summary.update({"data/train_rows": len(ds), "data/eval_rows": len(eval_ds or []),
+                        "data/dropped_overlength_train": dropped_train, "data/dropped_overlength_eval": dropped_eval})
+    print(f"rows: train {len(ds)} (dropped over-length {dropped_train}), eval {len(eval_ds or [])} (dropped {dropped_eval})")
     steps = cfg.train.max_steps if cfg.train.max_steps > 0 else cfg.train.num_train_epochs * math.ceil(
         len(ds) / (cfg.train.per_device_train_batch_size * cfg.train.gradient_accumulation_steps))
 
@@ -129,6 +159,8 @@ def main(cfg: DictConfig) -> None:
         max_steps=cfg.train.max_steps,
         num_train_epochs=cfg.train.num_train_epochs,
         save_steps=cfg.train.save_steps,
+        eval_strategy="steps" if eval_ds else "no",
+        eval_steps=cfg.train.save_steps,
         save_total_limit=2,
         logging_steps=cfg.train.logging_steps,
         learning_rate=cfg.train.learning_rate,
@@ -154,6 +186,7 @@ def main(cfg: DictConfig) -> None:
         model=model,
         args=args,
         train_dataset=ds,
+        eval_dataset=eval_ds,
         processing_class=tok,
         peft_config=lora,
         callbacks=[MirrorCheckpoints(f"{cfg.run_name}-ckpt"), StepStats()],
