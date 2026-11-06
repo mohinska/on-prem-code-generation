@@ -74,6 +74,14 @@ def load_tasks(cfg: dict, limit: int | None) -> dict[tuple[str, str, str], Task]
     return out
 
 
+def answer_of(g: dict) -> str:
+    """The answer of a stored generation. Rows written before the </think> fix kept reasoning and answer
+    together in `generation` (empty `reasoning`): split them again."""
+    if g["mode"] == "thinking" and not g.get("reasoning"):
+        return split_reasoning(g["generation"], None, thinking=True)[0]
+    return g["generation"]
+
+
 def _unit(row: dict) -> tuple:
     return row["benchmark"], row["task_mode"], row["mode"], row["decoding"], row["task_id"], row["run"]
 
@@ -106,7 +114,7 @@ def generate(cfg: dict, tasks: dict, out: Path) -> Path:
         messages = messages_for(task)
         rows = []
         for i, s in enumerate(client.generate(messages, sampling, thinking)):
-            answer, reasoning = split_reasoning(s["content"], s["reasoning"])
+            answer, reasoning = split_reasoning(s["content"], s["reasoning"], thinking)
             rows.append({"task_id": tid, "benchmark": bench, "task_mode": tm, "mode": mode, "decoding": decoding,
                          "run": run_idx, "sample_idx": run_idx * sampling["n"] + i,
                          "prompt": messages[-1]["content"], "generation": answer, "reasoning": reasoning,
@@ -146,7 +154,7 @@ def execute_all(cfg: dict, tasks: dict, gen_path: Path, out: Path) -> Path:
     no_program = []
     for g in gens:
         task = tasks[(g["benchmark"], g["task_mode"], g["task_id"])]
-        program = program_from_answer(task, g["generation"])
+        program = program_from_answer(task, answer_of(g))
         g["program"] = program
         if program is None:
             no_program.append(g)

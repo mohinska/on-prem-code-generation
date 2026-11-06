@@ -55,6 +55,28 @@ def test_split_reasoning(content, reasoning, answer, trace):
     assert g.split_reasoning(content, reasoning) == (answer, trace)
 
 
+def test_thinking_without_opening_tag():
+    """Qwen's chat template puts <think> into the prompt, so the reply is `reasoning</think>answer`."""
+    content = "draft ```python\nBAD\n``` </think>\n```python\nGOOD\n```"
+    answer, trace = g.split_reasoning(content, None, thinking=True)
+    assert answer == "\n```python\nGOOD\n```" and "BAD" in trace
+    task = _task(bench="humaneval_python", lang="python", prompt="def add(a):\n", entry="add")
+    assert g.program_from_answer(task, answer) == "def add(a):\nGOOD\n"
+
+
+def test_thinking_truncated_has_no_answer():
+    assert g.split_reasoning("still thinking ```python\nX\n```", None, thinking=True) == ("", "still thinking ```python\nX\n```")
+
+
+def test_old_generations_are_resplit_at_execution():
+    """generations.jsonl written before the fix keeps reasoning + answer in `generation`, `reasoning` empty."""
+    old = {"mode": "thinking", "generation": "x ```python\nBAD\n``` </think>\nFINAL", "reasoning": ""}
+    assert r.answer_of(old) == "\nFINAL"
+    assert r.answer_of({"mode": "thinking", "generation": "never closed", "reasoning": ""}) == ""
+    assert r.answer_of({"mode": "thinking", "generation": "FINAL", "reasoning": "plan"}) == "FINAL"   # new format
+    assert r.answer_of({"mode": "non_thinking", "generation": "A", "reasoning": ""}) == "A"
+
+
 def test_code_inside_thinking_is_not_the_answer():
     answer, _ = g.split_reasoning("<think>```cobol\nDRAFT\n```</think>```cobol\nFINAL\n```", None)
     assert g.program_from_answer(_task(bench="cobolcodebench"), answer) == "FINAL\n"

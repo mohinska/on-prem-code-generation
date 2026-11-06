@@ -106,12 +106,15 @@ vLLM on 1× A100 80 GB, `base`. Pass@1 as fractions; pass@10 only for sampled de
 | CobolCodeBench instruct | non-thinking | sampled | 0.0011 | 0.0109 | 0.1087 | 0.0467 | 0.0446 |
 | HumanEval-Python (164) | non-thinking | greedy | 0.9715 | | 0.9980 | 0.0020 | 0.0020 |
 | HumanEval-Python | non-thinking | sampled | 0.9686 | 0.9939 | 0.9994 | 0.0006 | 0.0006 |
-| COBOLEval | thinking | sampled (n 10) | 0.0041 | 0.0411 | 0.0068 | 0.0151 | 0.3747 |
+| COBOLEval | thinking | sampled (n 10) | 0.0514 | 0.2808 | 0.0644 | 0.3753 | 0.3747 |
+| HumanEval-Python | thinking | sampled (n 10) | 0.9622 | 0.9756 | 0.9823 | 0.0177 | 0.0171 |
 
-- Headroom confirmed: COBOLEval pass@1 0.0434 (greedy) vs HumanEval-Python 0.9715, COBOLEval compile rate 0.1142.
+- Headroom confirmed: COBOLEval pass@1 0.0434 (greedy, non-thinking) vs HumanEval-Python 0.9715, COBOLEval compile rate 0.1142. Thinking is better than non-thinking on COBOLEval (pass@10 0.2808 vs 0.1496), held back by truncation.
 - Non-thinking: generation [4q4hi07a](https://wandb.ai/mllab-team/onprem-codegen/runs/4q4hi07a) (commit `bb68f18`, 2h 41m), metrics [al1olufk](https://wandb.ai/mllab-team/onprem-codegen/runs/al1olufk) (commit `931124b`), full protocol `configs/eval/baseline.yaml`.
-- Thinking is cut down (`configs/eval/baseline-thinking.yaml`): COBOLEval only, sampled n 10 (no greedy in the manifest); full thinking on all benchmarks with n 20 would take ~4.5 days on 1× A100 (answers ~21k tokens). Generation [ada15z6w](https://wandb.ai/mllab-team/onprem-codegen/runs/ada15z6w) (commit missing, 12h 55m), metrics [mhwq0y9r](https://wandb.ai/mllab-team/onprem-codegen/runs/mhwq0y9r) (commit `931124b`).
-- 37.47% of the thinking answers hit the token limit without a program, so the thinking numbers are a lower bound.
+- Thinking is cut down (`configs/eval/baseline-thinking.yaml`, `baseline-thinking-humaneval.yaml`): COBOLEval and HumanEval-Python only (no CobolCodeBench), sampled n 10 (no greedy in the manifest); full thinking on all benchmarks with n 20 would take ~4.5 days on 1× A100 (answers ~21k tokens). COBOLEval generation [ada15z6w](https://wandb.ai/mllab-team/onprem-codegen/runs/ada15z6w) (12h 55m, A100), HumanEval-Python generation [6epckk6y](https://wandb.ai/mllab-team/onprem-codegen/runs/6epckk6y) (commit `6db21f1`, Vast 59413631, RTX PRO 6000 S, vLLM 0.32.0, 164 requests, 1640 samples, 88 min on the instance after 40 requests were generated from a laptop over an SSH tunnel and copied over).
+- Metrics: COBOLEval [p3lre4hl](https://wandb.ai/mllab-team/onprem-codegen/runs/p3lre4hl), HumanEval-Python [eahirhs4](https://wandb.ai/mllab-team/onprem-codegen/runs/eahirhs4), both re-executed after the fix below.
+- 37.47% of the COBOLEval thinking answers hit the 28000-token limit without a program (HumanEval-Python 1.71%), so the COBOLEval thinking numbers are a lower bound.
+- **Bug found and fixed in the thinking answer parser.** Qwen's chat template puts `<think>` into the prompt, so the reply is `reasoning</think>answer` with no opening tag. `split_reasoning` only removed `<think>...</think>` pairs, so nothing was removed and `program_from_answer` took the first code block, which is in the reasoning. First thinking numbers (before the fix): HumanEval-Python pass@1 0.2713, pass@10 0.9085, compile 0.3281 (1097 of 1640 samples `compile_error`: 1611 replies contained `</think>`, the `reasoning` field was empty in all 1640); COBOLEval pass@1 0.0041, pass@10 0.0411, compile 0.0068 (run mhwq0y9r). Fix: `split_reasoning` splits at the last `</think>` and treats a thinking reply without it as truncated; `eval.run.answer_of` splits old rows of `generations.jsonl` again at execution, so no generation was repeated. Non-thinking numbers are not affected (no `</think>`).
 
 ### still missing
-SFT results (A, C), thinking baseline on CobolCodeBench and HumanEval-Python (not run, see above), baseline Vast instance ID, CodeNet licence (C), reports.
+SFT results (A, C), thinking baseline on CobolCodeBench (not run, see above), Vast instance ID of the non-thinking baseline, CodeNet licence (C), reports.

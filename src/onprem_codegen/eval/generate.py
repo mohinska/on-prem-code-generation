@@ -40,14 +40,19 @@ def messages_for(task: Task) -> list[dict]:
 
 # ---------- answer -> program ----------
 
-def split_reasoning(content: str, reasoning: str | None) -> tuple[str, str]:
+def split_reasoning(content: str, reasoning: str | None, thinking: bool = False) -> tuple[str, str]:
     """(answer, reasoning). vLLM with a reasoning parser returns the trace separately; without one it
-    stays in `content` as <think>...</think>. An unclosed <think> means the answer was truncated."""
+    stays in `content`. Qwen's chat template puts the opening <think> into the prompt, so the reply is
+    `trace</think>answer` (no opening tag); a full <think>...</think> pair is handled too. No </think> in a
+    thinking reply, or an unclosed <think>, means the answer was truncated."""
     if reasoning:
         return content, reasoning
+    if "<think>" not in content and "</think>" in content:
+        head, _, tail = content.rpartition("</think>")
+        return tail, head + "</think>"
     traces = "".join(m.group(0) for m in _THINK.finditer(content))
     answer = _THINK.sub("", content)
-    if "<think>" in answer:   # opened, never closed
+    if "<think>" in answer or (thinking and "</think>" not in content):
         return "", traces + answer
     return answer, traces
 
