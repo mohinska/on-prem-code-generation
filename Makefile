@@ -2,7 +2,7 @@
 PY ?= python
 export PYTHONPATH := src
 
-.PHONY: test codenet data sft-data decontam train train-smoke benchmarks eval eval-generate eval-execute
+.PHONY: test codenet data sft-data decontam train train-smoke train-dryrun benchmarks eval eval-generate eval-execute
 
 test:
 	$(PY) -m pytest -q
@@ -28,6 +28,10 @@ decontam:
 
 train-smoke:
 	$(PY) -m onprem_codegen.train.sft
+
+# B1 dry run: 27B at real length; kill after the step-10 checkpoint artifact, delete checkpoints/sft-dryrun, rerun
+train-dryrun:
+	$(PY) -m onprem_codegen.train.sft run_name=sft-dryrun train.max_steps=20 train.max_length=4096 train.save_steps=10 $(ARGS)
 
 # make train ARGS="run_name=sft-v1"
 train:

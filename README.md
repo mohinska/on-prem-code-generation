@@ -83,7 +83,7 @@ make test
 | `make codenet` | CodeNet COBOL parts and `task-pool` artifact |
 | `make data` | `raw-corpus` then `clean-corpus` |
 | `make sft-data` | rejection sampling against the vLLM server, then `sft-dataset` |
-| `make train` | SFT (`make train-smoke` for a smoke run) |
+| `make train` | SFT (`make train-smoke` for a smoke run, `make train-dryrun` for the 27B kill-and-resume check) |
 | `make benchmarks` | fetch pinned benchmarks, log `benchmark-*` artifacts |
 | `make eval` | generate, execute, metrics (also `eval-generate`, `eval-execute`) |
 

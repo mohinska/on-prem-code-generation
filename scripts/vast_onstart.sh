@@ -10,6 +10,8 @@ REPO_DIR=/workspace/on-prem-code-generation
 BRANCH=${BRANCH:-main}
 export HF_HOME=/workspace/hf-cache
 export DEBIAN_FRONTEND=noninteractive
+# The image's torch lives in the system Python (PEP 668 "externally managed"); the container is disposable.
+export PIP_BREAK_SYSTEM_PACKAGES=1
 
 apt-get update -qq && apt-get install -y -qq git tmux ninja-build > /dev/null
 

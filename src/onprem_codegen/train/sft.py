@@ -86,7 +86,8 @@ class MirrorCheckpoints(TrainerCallback):
             return
         art = wandb.Artifact(self.name, type="checkpoint", metadata={"step": state.global_step})
         art.add_dir(str(Path(args.output_dir) / f"checkpoint-{state.global_step}"))
-        wandb.log_artifact(art, aliases=["latest", f"step-{state.global_step}"])
+        # Block until uploaded: a kill/preemption right after save must not lose the checkpoint.
+        wandb.log_artifact(art, aliases=["latest", f"step-{state.global_step}"]).wait()
 
 
 class StepStats(TrainerCallback):
