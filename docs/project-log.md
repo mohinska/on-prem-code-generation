@@ -94,7 +94,7 @@ Every task in `task-pool:v1` has one test, the first sample of its statement. Th
 811 rows on 349 tasks (rejection_sampling 328 on 125 tasks, codenet_cobol 483 on 288 tasks; 64 tasks have both). `tasks_solved` 145, dropped: `over_cap` 222, `few_tests` 53, `too_hard` 6. Inputs `task-pool:v1`, `clean-corpus:v4`; generations from Vast 59224690, re-run and uploaded locally. [Run](https://wandb.ai/mllab-team/onprem-codegen/runs/7b6m2nvv), commit `6388dd6`.
 
 ### baseline eval (Qwen/Qwen3.8-27B, no adapter)
-vLLM on 1× A100 80 GB, `base`. Pass@1 as fractions; pass@10 only for sampled decoding. Vast instance ID not recorded.
+vLLM on 1× A100 80 GB, `base`. Pass@1 as fractions; pass@10 only for sampled decoding. Frozen copy of this table, the artifact map and the `baseline-final-*` aliases: [baseline.md](baseline.md).
 
 | Benchmark / prompt | Mode | Decoding | pass@1 | pass@10 | compile_rate | no_program | truncation |
 |---|---|---|---|---|---|---|---|
@@ -116,5 +116,15 @@ vLLM on 1× A100 80 GB, `base`. Pass@1 as fractions; pass@10 only for sampled de
 - 37.47% of the COBOLEval thinking answers hit the 28000-token limit without a program (HumanEval-Python 1.71%), so the COBOLEval thinking numbers are a lower bound.
 - **Bug found and fixed in the thinking answer parser.** Qwen's chat template puts `<think>` into the prompt, so the reply is `reasoning</think>answer` with no opening tag. `split_reasoning` only removed `<think>...</think>` pairs, so nothing was removed and `program_from_answer` took the first code block, which is in the reasoning. First thinking numbers (before the fix): HumanEval-Python pass@1 0.2713, pass@10 0.9085, compile 0.3281 (1097 of 1640 samples `compile_error`: 1611 replies contained `</think>`, the `reasoning` field was empty in all 1640); COBOLEval pass@1 0.0041, pass@10 0.0411, compile 0.0068 (run mhwq0y9r). Fix: `split_reasoning` splits at the last `</think>` and treats a thinking reply without it as truncated; `eval.run.answer_of` splits old rows of `generations.jsonl` again at execution, so no generation was repeated. Non-thinking numbers are not affected (no `</think>`).
 
+- **Where each baseline part ran** (W&B does not store the Vast instance ID: `vast_instance_id` is empty in every eval run config, and `host` is the container ID, not the Vast ID):
+
+  | Part | Generation run (W&B created) | Instance |
+  |---|---|---|
+  | non-thinking, all benchmarks | [4q4hi07a](https://wandb.ai/mllab-team/onprem-codegen/runs/4q4hi07a) (2026-11-03) | 1× A100 80 GB; Vast ID not recorded |
+  | thinking, COBOLEval | [ada15z6w](https://wandb.ai/mllab-team/onprem-codegen/runs/ada15z6w) (2026-11-04) | 1× A100 80 GB (host `33ee8b5d4044`, no `git_commit` logged); Vast ID not recorded |
+  | thinking, HumanEval-Python | [6epckk6y](https://wandb.ai/mllab-team/onprem-codegen/runs/6epckk6y) (2026-11-06) | Vast 59413631, RTX PRO 6000 S, vLLM 0.32.0 |
+
+  `/v1/models` output was not saved for any of them.
+
 ### still missing
-SFT results (A, C), thinking baseline on CobolCodeBench (not run, see above), Vast instance ID of the non-thinking baseline, CodeNet licence (C), reports.
+SFT results (A, C), thinking baseline on CobolCodeBench (not run, see above), Vast instance IDs and `/v1/models` of the first two baseline generation runs (Ira), CodeNet licence (C), reports.
