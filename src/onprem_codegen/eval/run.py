@@ -254,8 +254,7 @@ def log_generations(run, gen_path: Path, cfg: dict) -> None:
 def run_config(cfg: dict) -> dict:
     pins = {name: {"revision": b["revision"], "files": b["fetch"]["files"]} for name, b in benchmarks.manifest().items()}
     return {**cfg, "git_commit": git_commit(), "protocol": protocol(cfg), "benchmark_pins": pins,
-            "execute_backend": os.environ.get("EXECUTE_BACKEND", "docker"),
-            "vast_instance": os.environ.get("CONTAINER_ID") or os.environ.get("VAST_CONTAINERLABEL")}
+            "execute_backend": os.environ.get("EXECUTE_BACKEND", "docker")}
 
 
 # ---------- main ----------

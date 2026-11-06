@@ -132,7 +132,6 @@ def main(cfg: DictConfig) -> None:
         config={
             **OmegaConf.to_container(cfg, resolve=True),
             "git_commit": git_commit(),
-            "vast_instance": os.environ.get("CONTAINER_ID") or os.environ.get("VAST_CONTAINERLABEL"),
         },
     )
 

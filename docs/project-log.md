@@ -41,7 +41,7 @@ Commit `dc9dfc4`, `configs/data/rejection_sampling.yaml` (n 16, temperature 0.7,
 ### rejection sampling: generation hints (same 20 tasks, no W&B)
 Base `931124b` plus `generation_hints` in `configs/data/rejection_sampling.yaml`: appended to the request only, the `sft-dataset` prompt stays `build_prompt` (0 of 15 rows contain a hint). n 16, temperature 0.7, top_p 0.8, max_tokens 2048, non-thinking, vLLM `--max-model-len 8192 --max-num-seqs 256`. Each hint set is cumulative.
 
-| Hints | GPU (Vast instance), concurrency | Tasks solved | ok | compile_error | wrong_output | runtime_error | timeout | no_program | Wall time |
+| Hints | GPU, concurrency | Tasks solved | ok | compile_error | wrong_output | runtime_error | timeout | no_program | Wall time |
 |---|---|---|---|---|---|---|---|---|---|
 | none | RTX PRO 6000 S (59220542), 8 | 1 | 1 | 263 | 28 | 5 | 2 | 21 | 4:10 |
 | WORKING-STORAGE spelling, `WS-` names, columns 8-72 | RTX PRO 6000 S (59220542), 8 | 3 | 6 | 242 | 43 | 3 | 5 | 21 | 4:11 |
@@ -54,7 +54,7 @@ Base `931124b` plus `generation_hints` in `configs/data/rejection_sampling.yaml`
 - Chat template ruled out: the prompt rendered by the server is identical to `apply_chat_template` of `Qwen/Qwen3.8-27B` with `enable_thinking=False`, and `train/sft.py` uses the same.
 
 ### rejection sampling: yield by task difficulty
-Commit `f84ab46`, generation_hints above, H200 NVL (Vast 59224690), concurrency 16, no W&B. `task-pool:v1` is ordered by problem id: AOJ problems first, AtCoder later; 288 of the 295 tasks with a human solution are AtCoder tasks of at most 500 points. The first 20 tasks are among the easiest, so the 5 of 20 above overestimates the pool.
+Commit `f84ab46`, generation_hints above, H200 NVL, concurrency 16, no W&B. `task-pool:v1` is ordered by problem id: AOJ problems first, AtCoder later; 288 of the 295 tasks with a human solution are AtCoder tasks of at most 500 points. The first 20 tasks are among the easiest, so the 5 of 20 above overestimates the pool.
 
 | Tasks | Tasks solved | ok | compile_error | wrong_output | timeout | runtime_error | no_program (truncated) | sft rows |
 |---|---|---|---|---|---|---|---|---|
@@ -66,7 +66,7 @@ Commit `f84ab46`, generation_hints above, H200 NVL (Vast 59224690), concurrency 
 - Order of generation: AtCoder tasks up to 500 points (`max_score: 500`), then `--second-pass` (16 more samples) on the unsolved tasks up to 300 points, then all other tasks (`max_score: null`). Human rows use every task.
 
 ### rejection sampling: full generation
-All 2104 tasks of `task-pool:v1`, generation_hints above, H200 NVL (Vast 59224690), concurrency 16, no W&B, order as above (commits `bd17060`, `d6d6b37`). Each row is cumulative and counts a program as `ok` after one test.
+All 2104 tasks of `task-pool:v1`, generation_hints above, H200 NVL, concurrency 16, no W&B, order as above (commits `bd17060`, `d6d6b37`). Each row is cumulative and counts a program as `ok` after one test.
 
 | After | Tasks sampled | Samples | Tasks solved | ok | compile_error | wrong_output | timeout | runtime_error | no_program (truncated) | sft rows |
 |---|---|---|---|---|---|---|---|---|---|---|
@@ -91,7 +91,7 @@ Every task in `task-pool:v1` has one test, the first sample of its statement. Th
 - `samples.jsonl` keeps the stronger status (`ok` 867 -> 584, `wrong_output` 4167 -> 4445, `timeout` 244 -> 249), so DPO pairs don't use these programs as chosen.
 
 ### sft-dataset:v0
-811 rows on 349 tasks (rejection_sampling 328 on 125 tasks, codenet_cobol 483 on 288 tasks; 64 tasks have both). `tasks_solved` 145, dropped: `over_cap` 222, `few_tests` 53, `too_hard` 6. Inputs `task-pool:v1`, `clean-corpus:v4`; generations from Vast 59224690, re-run and uploaded locally. [Run](https://wandb.ai/mllab-team/onprem-codegen/runs/7b6m2nvv), commit `6388dd6`.
+811 rows on 349 tasks (rejection_sampling 328 on 125 tasks, codenet_cobol 483 on 288 tasks; 64 tasks have both). `tasks_solved` 145, dropped: `over_cap` 222, `few_tests` 53, `too_hard` 6. Inputs `task-pool:v1`, `clean-corpus:v4`; generations from H200 NVL, re-run and uploaded locally. [Run](https://wandb.ai/mllab-team/onprem-codegen/runs/7b6m2nvv), commit `6388dd6`.
 
 ### baseline eval (Qwen/Qwen3.8-27B, no adapter)
 vLLM on 1× A100 80 GB, `base`. Pass@1 as fractions; pass@10 only for sampled decoding. Frozen copy of this table, the artifact map and the `baseline-final-*` aliases: [baseline.md](baseline.md).
@@ -111,20 +111,12 @@ vLLM on 1× A100 80 GB, `base`. Pass@1 as fractions; pass@10 only for sampled de
 
 - Headroom confirmed: COBOLEval pass@1 0.0434 (greedy, non-thinking) vs HumanEval-Python 0.9715, COBOLEval compile rate 0.1142. Thinking is better than non-thinking on COBOLEval (pass@10 0.2808 vs 0.1496), held back by truncation.
 - Non-thinking: generation [4q4hi07a](https://wandb.ai/mllab-team/onprem-codegen/runs/4q4hi07a) (commit `bb68f18`, 2h 41m), metrics [al1olufk](https://wandb.ai/mllab-team/onprem-codegen/runs/al1olufk) (commit `931124b`), full protocol `configs/eval/baseline.yaml`.
-- Thinking is cut down (`configs/eval/baseline-thinking.yaml`, `baseline-thinking-humaneval.yaml`): COBOLEval and HumanEval-Python only (no CobolCodeBench), sampled n 10 (no greedy in the manifest); full thinking on all benchmarks with n 20 would take ~4.5 days on 1× A100 (answers ~21k tokens). COBOLEval generation [ada15z6w](https://wandb.ai/mllab-team/onprem-codegen/runs/ada15z6w) (12h 55m, A100), HumanEval-Python generation [6epckk6y](https://wandb.ai/mllab-team/onprem-codegen/runs/6epckk6y) (commit `6db21f1`, Vast 59413631, RTX PRO 6000 S, vLLM 0.32.0, 164 requests, 1640 samples, 88 min on the instance after 40 requests were generated from a laptop over an SSH tunnel and copied over).
+- Thinking is cut down (`configs/eval/baseline-thinking.yaml`, `baseline-thinking-humaneval.yaml`): COBOLEval and HumanEval-Python only (no CobolCodeBench), sampled n 10 (no greedy in the manifest); full thinking on all benchmarks with n 20 would take ~4.5 days on 1× A100 (answers ~21k tokens). COBOLEval generation [ada15z6w](https://wandb.ai/mllab-team/onprem-codegen/runs/ada15z6w) (12h 55m, A100), HumanEval-Python generation [6epckk6y](https://wandb.ai/mllab-team/onprem-codegen/runs/6epckk6y) (commit `6db21f1`, RTX PRO 6000 S, vLLM 0.32.0, 164 requests, 1640 samples, 88 min on the instance after 40 requests were generated from a laptop over an SSH tunnel and copied over).
 - Metrics: COBOLEval [p3lre4hl](https://wandb.ai/mllab-team/onprem-codegen/runs/p3lre4hl), HumanEval-Python [eahirhs4](https://wandb.ai/mllab-team/onprem-codegen/runs/eahirhs4), both re-executed after the fix below.
 - 37.47% of the COBOLEval thinking answers hit the 28000-token limit without a program (HumanEval-Python 1.71%), so the COBOLEval thinking numbers are a lower bound.
 - **Bug found and fixed in the thinking answer parser.** Qwen's chat template puts `<think>` into the prompt, so the reply is `reasoning</think>answer` with no opening tag. `split_reasoning` only removed `<think>...</think>` pairs, so nothing was removed and `program_from_answer` took the first code block, which is in the reasoning. First thinking numbers (before the fix): HumanEval-Python pass@1 0.2713, pass@10 0.9085, compile 0.3281 (1097 of 1640 samples `compile_error`: 1611 replies contained `</think>`, the `reasoning` field was empty in all 1640); COBOLEval pass@1 0.0041, pass@10 0.0411, compile 0.0068 (run mhwq0y9r). Fix: `split_reasoning` splits at the last `</think>` and treats a thinking reply without it as truncated; `eval.run.answer_of` splits old rows of `generations.jsonl` again at execution, so no generation was repeated. Non-thinking numbers are not affected (no `</think>`).
 
-- **Where each baseline part ran** (W&B does not store the Vast instance ID: `vast_instance_id` is empty in every eval run config, and `host` is the container ID, not the Vast ID):
-
-  | Part | Generation run (W&B created) | Instance |
-  |---|---|---|
-  | non-thinking, all benchmarks | [4q4hi07a](https://wandb.ai/mllab-team/onprem-codegen/runs/4q4hi07a) (2026-11-03) | 1× A100 80 GB; Vast ID not recorded |
-  | thinking, COBOLEval | [ada15z6w](https://wandb.ai/mllab-team/onprem-codegen/runs/ada15z6w) (2026-11-04) | 1× A100 80 GB (host `33ee8b5d4044`, no `git_commit` logged); Vast ID not recorded |
-  | thinking, HumanEval-Python | [6epckk6y](https://wandb.ai/mllab-team/onprem-codegen/runs/6epckk6y) (2026-11-06) | Vast 59413631, RTX PRO 6000 S, vLLM 0.32.0 |
-
-  `/v1/models` output was not saved for any of them.
+- COBOLEval thinking generation [ada15z6w](https://wandb.ai/mllab-team/onprem-codegen/runs/ada15z6w) has no `git_commit` in W&B.
 
 ### still missing
-SFT results (A, C), thinking baseline on CobolCodeBench (not run, see above), Vast instance IDs and `/v1/models` of the first two baseline generation runs (Ira), CodeNet licence (C), reports.
+SFT results (A, C), thinking baseline on CobolCodeBench (not run, see above), CodeNet licence (C), reports.

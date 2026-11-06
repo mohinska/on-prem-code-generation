@@ -321,16 +321,15 @@ class _FakeRun:
         (Path(root) / "manifest.parquet").write_text("downloaded")
 
 
-def test_init_run_reads_project_and_vast_instance_from_env(monkeypatch):
+def test_init_run_reads_project_from_env(monkeypatch):
     calls = {}
     fake = type(sys)("wandb")
     fake.init = lambda **kw: calls.update(kw) or "run"
     monkeypatch.setitem(sys.modules, "wandb", fake)
     monkeypatch.setenv("WANDB_PROJECT", "proj")
-    monkeypatch.setenv("CONTAINER_ID", "123")
     assert utils.init_run("clean", {"a": 1}, "n") == "run"
     assert calls["project"] == "proj" and calls["job_type"] == "clean"
-    assert calls["config"]["a"] == 1 and calls["config"]["vast_instance"] == "123" and "git_commit" in calls["config"]
+    assert calls["config"]["a"] == 1 and "git_commit" in calls["config"]
 
 
 def test_ensure_raw_downloads_only_when_missing(tmp_path):

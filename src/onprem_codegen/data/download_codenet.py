@@ -212,8 +212,7 @@ def main() -> None:
     if not a.no_wandb:
         import wandb
         with wandb.init(project=os.environ.get("WANDB_PROJECT", "onprem-codegen"), job_type="task-pool",
-                        config={**cfg, "git_commit": git_commit(),
-                                "vast_instance": os.environ.get("CONTAINER_ID") or os.environ.get("VAST_CONTAINERLABEL")}) as run:
+                        config={**cfg, "git_commit": git_commit()}) as run:
             run.summary.update({k: v for k, v in stats.items() if not isinstance(v, dict)})
             art = wandb.Artifact("task-pool", type="dataset", metadata={**stats, "codenet_version": cfg["version"]})
             art.add_dir(str(OUT))

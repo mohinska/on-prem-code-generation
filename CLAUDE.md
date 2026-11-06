@@ -54,7 +54,7 @@ W&B dashboards + model registry, base-vs-adapted evaluation report, live before/
   `decontam-report` (report, optional, what was removed and why).
 - Every stage consumes its inputs **from W&B artifacts** and logs outputs as new artifact versions,
   so lineage from raw corpus to deployed model is automatic.
-- Every run logs: git commit, config, input/output artifacts, Vast instance ID.
+- Every run logs: git commit, config, input/output artifacts. GPU comes from W&B system metadata; note the vLLM version in the project log.
 - Sweeps are small: learning rate × LoRA rank, few configs, short runs.
 
 ## Vast.ai rules

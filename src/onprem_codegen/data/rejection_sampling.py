@@ -189,8 +189,7 @@ def main() -> None:
     if not a.no_wandb:
         import wandb
         run = wandb.init(project=os.environ.get("WANDB_PROJECT", "onprem-codegen"), job_type="rejection-sampling",
-                         config={**cfg, "git_commit": git_commit(),
-                                 "vast_instance": os.environ.get("CONTAINER_ID") or os.environ.get("VAST_CONTAINERLABEL")})
+                         config={**cfg, "git_commit": git_commit()})
     pool = Path(a.task_pool) if a.task_pool else Path(run.use_artifact(cfg["task_pool"]).download()) / "task_pool.jsonl"
     tasks = {t["task_id"]: t for t in read_jsonl(pool)[:a.limit]}
 
