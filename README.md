@@ -115,6 +115,8 @@ Smoke test without a custom image: start from `pytorch/pytorch:2.11.0-cuda12.8-c
 **Serving:** start from the `onprem-codegen-serve` image, fetch the adapter
 (`wandb artifact get <entity>/<project>/adapter:production --root /adapters/cobol`), run `serve-entrypoint.sh`,
 then tunnel with `ssh -p <PORT> root@<HOST> -N -L 8000:localhost:8000`. `localhost:8000/v1/models` lists `base` and `cobol`.
+On a plain PyTorch-template instance without Docker: `ADAPTER=<name:alias> bash scripts/vast_serve.sh` (own venv for vLLM, fetches the adapter, serves).
+`python -m onprem_codegen.serve.check` through the tunnel checks that both models answer.
 
 ## Eval
 
