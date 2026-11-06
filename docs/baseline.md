@@ -17,6 +17,25 @@ Frozen at commit `a1a88b4`. Pass@1 as fractions; pass@10 only for sampled decodi
 | COBOLEval | thinking | sampled (n 10) | 0.0514 | 0.2808 | 0.0644 | 0.3753 | 0.3747 |
 | HumanEval-Python | thinking | sampled (n 10) | 0.9622 | 0.9756 | 0.9823 | 0.0177 | 0.0171 |
 
+## 95% CI (noise level)
+
+Bootstrap over tasks (2000 resamples, seed 0) of the per-task pass@k, from the frozen `eval-results` artifacts; `-` where a
+task has fewer than k samples. An adapted result counts as better than noise only if its paired Δ CI (`eval.report`) excludes 0.
+Reproduce: `python -m onprem_codegen.eval.report --ci-of <results.jsonl>...`
+
+| group | tasks | pass@1 [95% CI] | pass@10 [95% CI] |
+|---|---|---|---|
+| coboleval/completion/non_thinking/greedy | 146 | 0.043 [0.018, 0.078] | - |
+| coboleval/completion/non_thinking/sampled | 146 | 0.019 [0.013, 0.026] | 0.150 [0.105, 0.195] |
+| coboleval/completion/thinking/sampled | 146 | 0.051 [0.036, 0.070] | 0.281 [0.212, 0.356] |
+| cobolcodebench/completion/non_thinking/greedy | 46 | 0.007 [0.000, 0.022] | - |
+| cobolcodebench/completion/non_thinking/sampled | 46 | 0.008 [0.000, 0.018] | 0.048 [0.000, 0.109] |
+| cobolcodebench/instruct/non_thinking/greedy | 46 | 0.000 [0.000, 0.000] | - |
+| cobolcodebench/instruct/non_thinking/sampled | 46 | 0.001 [0.000, 0.003] | 0.011 [0.000, 0.033] |
+| humaneval_python/completion/non_thinking/greedy | 164 | 0.972 [0.949, 0.992] | - |
+| humaneval_python/completion/non_thinking/sampled | 164 | 0.969 [0.947, 0.985] | 0.994 [0.982, 1.000] |
+| humaneval_python/completion/thinking/sampled | 164 | 0.962 [0.933, 0.985] | 0.976 [0.951, 0.994] |
+
 Limits: no thinking on CobolCodeBench (not run), no greedy in thinking, thinking n 10 instead of 20; COBOLEval thinking is a
 lower bound (37.5% of answers hit the 28000-token limit).
 
