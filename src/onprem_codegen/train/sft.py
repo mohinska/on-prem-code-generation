@@ -8,6 +8,7 @@ Restartable: checkpoints are mirrored to W&B, so a fresh instance resumes from t
 
 import math
 import os
+import time
 from pathlib import Path
 
 import hydra
@@ -65,6 +66,21 @@ class MirrorCheckpoints(TrainerCallback):
         art = wandb.Artifact(self.name, type="checkpoint", metadata={"step": state.global_step})
         art.add_dir(str(Path(args.output_dir) / f"checkpoint-{state.global_step}"))
         wandb.log_artifact(art, aliases=["latest", f"step-{state.global_step}"])
+
+
+class StepStats(TrainerCallback):
+    """Wall time per optimizer step and peak GPU memory (reserved, ~ nvidia-smi), for sizing real runs."""
+
+    def on_step_begin(self, args, state, control, **kwargs):
+        self.t = time.perf_counter()
+
+    def on_step_end(self, args, state, control, **kwargs):
+        if state.is_world_process_zero:
+            wandb.log({
+                "perf/s_per_step": time.perf_counter() - self.t,
+                "perf/peak_mem_gb": torch.cuda.max_memory_reserved() / 2**30,
+                "train/global_step": state.global_step,
+            })
 
 
 def find_checkpoint(cfg: DictConfig, run) -> str | None:
@@ -140,8 +156,10 @@ def main(cfg: DictConfig) -> None:
         train_dataset=ds,
         processing_class=tok,
         peft_config=lora,
-        callbacks=[MirrorCheckpoints(f"{cfg.run_name}-ckpt")],
+        callbacks=[MirrorCheckpoints(f"{cfg.run_name}-ckpt"), StepStats()],
     )
+    trainer.model.print_trainable_parameters()
+    run.summary["trainable_params"] = sum(p.numel() for p in trainer.model.parameters() if p.requires_grad)
     trainer.train(resume_from_checkpoint=find_checkpoint(cfg, run))
 
     adapter_dir = Path(cfg.train.output_dir) / "adapter"
