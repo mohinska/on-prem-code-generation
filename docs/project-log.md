@@ -93,5 +93,25 @@ Every task in `task-pool:v1` has one test, the first sample of its statement. Th
 ### sft-dataset:v0
 811 rows on 349 tasks (rejection_sampling 328 on 125 tasks, codenet_cobol 483 on 288 tasks; 64 tasks have both). `tasks_solved` 145, dropped: `over_cap` 222, `few_tests` 53, `too_hard` 6. Inputs `task-pool:v1`, `clean-corpus:v4`; generations from Vast 59224690, re-run and uploaded locally. [Run](https://wandb.ai/mllab-team/onprem-codegen/runs/7b6m2nvv), commit `6388dd6`.
 
+### baseline eval (Qwen/Qwen3.8-27B, no adapter)
+vLLM on 1× A100 80 GB, `base`. Pass@1 as fractions; pass@10 only for sampled decoding. Vast instance ID not recorded.
+
+| Benchmark / prompt | Mode | Decoding | pass@1 | pass@10 | compile_rate | no_program | truncation |
+|---|---|---|---|---|---|---|---|
+| COBOLEval (146 tasks) | non-thinking | greedy | 0.0434 | | 0.1142 | 0.0183 | 0.0160 |
+| COBOLEval | non-thinking | sampled | 0.0188 | 0.1496 | 0.0969 | 0.0079 | 0.0058 |
+| CobolCodeBench completion (46) | non-thinking | greedy | 0.0072 | | 0.1159 | 0.3043 | 0.3043 |
+| CobolCodeBench completion | non-thinking | sampled | 0.0076 | 0.0483 | 0.1109 | 0.1076 | 0.1022 |
+| CobolCodeBench instruct (46) | non-thinking | greedy | 0 | | 0.1449 | 0.1159 | 0.1159 |
+| CobolCodeBench instruct | non-thinking | sampled | 0.0011 | 0.0109 | 0.1087 | 0.0467 | 0.0446 |
+| HumanEval-Python (164) | non-thinking | greedy | 0.9715 | | 0.9980 | 0.0020 | 0.0020 |
+| HumanEval-Python | non-thinking | sampled | 0.9686 | 0.9939 | 0.9994 | 0.0006 | 0.0006 |
+| COBOLEval | thinking | sampled (n 10) | 0.0041 | 0.0411 | 0.0068 | 0.0151 | 0.3747 |
+
+- Headroom confirmed: COBOLEval pass@1 0.0434 (greedy) vs HumanEval-Python 0.9715, COBOLEval compile rate 0.1142.
+- Non-thinking: generation [4q4hi07a](https://wandb.ai/mllab-team/onprem-codegen/runs/4q4hi07a) (commit `bb68f18`, 2h 41m), metrics [al1olufk](https://wandb.ai/mllab-team/onprem-codegen/runs/al1olufk) (commit `931124b`), full protocol `configs/eval/baseline.yaml`.
+- Thinking is cut down (`configs/eval/baseline-thinking.yaml`): COBOLEval only, sampled n 10 (no greedy in the manifest); full thinking on all benchmarks with n 20 would take ~4.5 days on 1× A100 (answers ~21k tokens). Generation [ada15z6w](https://wandb.ai/mllab-team/onprem-codegen/runs/ada15z6w) (commit missing, 12h 55m), metrics [mhwq0y9r](https://wandb.ai/mllab-team/onprem-codegen/runs/mhwq0y9r) (commit `931124b`).
+- 37.47% of the thinking answers hit the token limit without a program, so the thinking numbers are a lower bound.
+
 ### still missing
-Baseline eval and SFT results (A, C), CodeNet licence (C), reports.
+SFT results (A, C), thinking baseline on CobolCodeBench and HumanEval-Python (not run, see above), baseline Vast instance ID, CodeNet licence (C), reports.
