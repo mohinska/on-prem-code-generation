@@ -106,7 +106,7 @@ Tokens counted with the Qwen3.8 tokenizer on prompt + completion (chat template 
 - Rows per task: max 8, 155 tasks have one row, 39 tasks have 5 or more (top: `codenet/p03085` 8, `codenet/p04011` 8, `codenet/p02915` 7). No completion is cut off (all end with the closing fence), no duplicate completions.
 - Rejection sampling yield: 40 816 samples on 2104 tasks, 584 `ok` (1.43%), 145 tasks solved (6.9%); the rest of the status counts are compile_error 24 027, no_program 11 476, wrong_output 4445.
 - Epochs: with 712 train rows B1 used 0.56 of an epoch in 25 steps and eval loss was still falling (0.419 → 0.313). Proposed for `sft-v0`: 3 epochs (≈ 135 steps ≈ 35 min), one checkpoint and eval per epoch (`save_steps` 45), keep the checkpoint with the lowest eval loss.
-- Manual review of 20 rows (10 per source): pending.
+- Manual review of 20 random rows (10 per source, seed 13): **go**. Thresholds are met (811 rows ≥ 500, 349 tasks ≥ 200). `sft-v0` settings: `sft.yaml` as is (lr 2e-4, r 16, alpha 32, batch 1 × accumulation 16, `max_length` 4096, `eval_fraction` 0.1) with `train.num_train_epochs=3`, `train.save_steps=44` (one checkpoint and eval per epoch), `train.logging_steps=5`.
 
 ### SFT prompt format vs benchmark format
 `sft-dataset:v0` (811 rows) against COBOLEval (146 tasks) and CobolCodeBench (46 + 46). Count of programs / task fields containing the marker (`LINKAGE SECTION`; file I/O = `SELECT … ASSIGN` or `FILE SECTION`; `ACCEPT `; `DISPLAY `):
