@@ -93,6 +93,21 @@ Every task in `task-pool:v1` has one test, the first sample of its statement. Th
 ### sft-dataset:v0
 811 rows on 349 tasks (rejection_sampling 328 on 125 tasks, codenet_cobol 483 on 288 tasks; 64 tasks have both). `tasks_solved` 145, dropped: `over_cap` 222, `few_tests` 53, `too_hard` 6. Inputs `task-pool:v1`, `clean-corpus:v4`; generations from H200 NVL, re-run and uploaded locally. [Run](https://wandb.ai/mllab-team/onprem-codegen/runs/7b6m2nvv), commit `6388dd6`.
 
+### sft-dataset:v0 review (C3, numbers)
+Tokens counted with the Qwen3.8 tokenizer on prompt + completion (chat template tokens not included).
+
+| Source | Rows | Tasks | Tokens median / p90 / max | Completion median |
+|---|---|---|---|---|
+| rejection_sampling | 328 | 125 | 566 / 881 / 1784 | 274 |
+| codenet_cobol | 483 | 288 | 614 / 1109 / 3620 | 294 |
+| all | 811 | 349 | 599 / 1014 / 3620 (p99 1696) | |
+
+- Length histogram (tokens): 0–256: 2, 256–512: 255, 512–768: 342, 768–1024: 134, 1024–1536: 59, 1536–2048: 14, 2048–3072: 4, 3072–4096: 1, over 4096: 0. `max_length` 4096 drops nothing (B1: dropped 0 of 811); 5 rows are over 2048.
+- Rows per task: max 8, 155 tasks have one row, 39 tasks have 5 or more (top: `codenet/p03085` 8, `codenet/p04011` 8, `codenet/p02915` 7). No completion is cut off (all end with the closing fence), no duplicate completions.
+- Rejection sampling yield: 40 816 samples on 2104 tasks, 584 `ok` (1.43%), 145 tasks solved (6.9%); the rest of the status counts are compile_error 24 027, no_program 11 476, wrong_output 4445.
+- Epochs: with 712 train rows B1 used 0.56 of an epoch in 25 steps and eval loss was still falling (0.419 → 0.313). Proposed for `sft-v0`: 3 epochs (≈ 135 steps ≈ 35 min), one checkpoint and eval per epoch (`save_steps` 45), keep the checkpoint with the lowest eval loss.
+- Manual review of 20 rows (10 per source): pending.
+
 ### SFT prompt format vs benchmark format
 `sft-dataset:v0` (811 rows) against COBOLEval (146 tasks) and CobolCodeBench (46 + 46). Count of programs / task fields containing the marker (`LINKAGE SECTION`; file I/O = `SELECT … ASSIGN` or `FILE SECTION`; `ACCEPT `; `DISPLAY `):
 
