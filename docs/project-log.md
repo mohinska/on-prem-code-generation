@@ -94,7 +94,7 @@ Every task in `task-pool:v1` has one test, the first sample of its statement. Th
 811 rows on 349 tasks (rejection_sampling 328 on 125 tasks, codenet_cobol 483 on 288 tasks; 64 tasks have both). `tasks_solved` 145, dropped: `over_cap` 222, `few_tests` 53, `too_hard` 6. Inputs `task-pool:v1`, `clean-corpus:v4`; generations from H200 NVL, re-run and uploaded locally. [Run](https://wandb.ai/mllab-team/onprem-codegen/runs/7b6m2nvv), commit `6388dd6`.
 
 ### baseline eval (Qwen/Qwen3.8-27B, no adapter)
-vLLM on 1× A100 80 GB, `base`. Pass@1 as fractions; pass@10 only for sampled decoding. Frozen copy of this table, the artifact map and the `baseline-final-*` aliases: [baseline.md](baseline.md).
+vLLM on 1× A100 80 GB, `base`. Pass@1 as fractions; pass@10 only for sampled decoding. Frozen copy of this table, 95% bootstrap CIs per group, the artifact map and the `baseline-final-*` aliases: [baseline.md](baseline.md). `eval.report` adds a paired Δ pass@1 CI to the base vs adapted table and `--ci-of results.jsonl...` prints the single-run CI table (bootstrap over tasks, 2000 resamples, seed 0).
 
 | Benchmark / prompt | Mode | Decoding | pass@1 | pass@10 | compile_rate | no_program | truncation |
 |---|---|---|---|---|---|---|---|
