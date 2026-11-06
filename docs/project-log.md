@@ -133,5 +133,23 @@ vLLM on 1× A100 80 GB, `base`. Pass@1 as fractions; pass@10 only for sampled de
 
 - COBOLEval thinking generation [ada15z6w](https://wandb.ai/mllab-team/onprem-codegen/runs/ada15z6w) has no `git_commit` in W&B.
 
+### B1: SFT dry run on the real dataset
+`--config-name sft run_name=sft-b1 train.max_steps=20 train.save_steps=5 train.logging_steps=1` on `sft-dataset:decontaminated` (v0), Qwen3.8-27B QLoRA r 16, `max_length` 4096, batch 1 × gradient accumulation 16, 1× RTX PRO 6000 Blackwell (98 GB), commit `8e531fa`. [Run sft-b1](https://wandb.ai/mllab-team/onprem-codegen/runs/sft-b1).
+
+| | |
+|---|---|
+| Rows | train 712, eval 99, over-length dropped 0 (≈ 45 steps per epoch) |
+| Trainable params | 116 727 808 |
+| Peak memory (`perf/peak_mem_gb`) | 23.9 GB, no OOM |
+| Seconds per step | first step 80.8 (warm-up), then median 15.3 (14–17; two steps of 34 and 37 around eval) |
+| Train loss | 0.608 (step 1) → 0.407 (step 20) |
+| Eval loss, steps 5 / 10 / 15 / 20 | 0.4188 / 0.3502 / 0.3214 / 0.3156 |
+| Eval mean token accuracy, step 20 | 0.9120 |
+| Outputs | `sft-b1-ckpt` v0–v3 (`step-5` … `step-20`), `sft-b1-adapter` (alias `candidate`) |
+
+- **Resume:** the first 20 steps finished before the planned kill (the whole run took ~12 min). Then the local `checkpoints/sft-b1` was deleted and the same command was run with `train.max_steps=25`: it continued the same W&B run `sft-b1` from the `step-20` checkpoint artifact, logged steps 21–25 (15.0–16.9 s each), eval loss at step 25 0.3127, and uploaded `step-25` (`sft-b1-ckpt` v4) and a new `sft-b1-adapter` version. Not tested: a kill in the middle of a step.
+- **Estimate for SFT v0 (2.1):** 45 steps per epoch × 15.3 s ≈ 11.5 min per epoch, plus eval and checkpoint uploads (~1–2 min each at `save_steps` 5; use a larger `save_steps` for the real run); 2 epochs ≈ 25–30 min. The planned 1.5 h per epoch assumed longer rows and slower steps.
+- Eval loss was still falling at step 25, with 712 train rows only; no sign of overfitting yet.
+
 ### still missing
 SFT results (A, C), thinking baseline on CobolCodeBench (not run, see above), CodeNet licence (C), reports.
