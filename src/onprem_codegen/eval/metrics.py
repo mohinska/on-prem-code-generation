@@ -6,6 +6,7 @@ A group is one (benchmark, task_mode, mode, decoding): every task in it has the 
 
 from __future__ import annotations
 
+import random
 from collections import Counter, defaultdict
 
 
@@ -39,3 +40,23 @@ def summarize(rows: list[dict], ks: list[int], exclude_tasks: set[str] = frozens
     out["truncation_rate"] = sum(r.get("finish_reason") == "length" for r in rows) / len(rows)
     out["status"] = dict(Counter(r["status"] for r in rows))
     return out
+
+
+def task_scores(rows: list[dict], k: int) -> dict[str, float]:
+    """pass@k of every task: {task_id: score}."""
+    per_task: dict[str, list[dict]] = defaultdict(list)
+    for r in rows:
+        per_task[r["task_id"]].append(r)
+    return {t: pass_at_k(len(v), sum(r["passed"] for r in v), k) for t, v in per_task.items()}
+
+
+def boot_ci(values: list[float], n_boot: int = 2000, seed: int = 0, alpha: float = 0.05) -> tuple[float, float]:
+    """Bootstrap (lo, hi) of the mean of per-task values."""
+    rng = random.Random(seed)
+    means = sorted(sum(rng.choices(values, k=len(values))) / len(values) for _ in range(n_boot))
+    return means[int(n_boot * alpha / 2)], means[int(n_boot * (1 - alpha / 2)) - 1]
+
+
+def delta_ci(base: dict[str, float], adapted: dict[str, float], **kw) -> tuple[float, float]:
+    """Paired bootstrap over the tasks both runs have: (lo, hi) of the mean score difference adapted - base."""
+    return boot_ci([adapted[t] - base[t] for t in sorted(base.keys() & adapted.keys())], **kw)
