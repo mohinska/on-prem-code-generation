@@ -93,6 +93,21 @@ Every task in `task-pool:v1` has one test, the first sample of its statement. Th
 ### sft-dataset:v0
 811 rows on 349 tasks (rejection_sampling 328 on 125 tasks, codenet_cobol 483 on 288 tasks; 64 tasks have both). `tasks_solved` 145, dropped: `over_cap` 222, `few_tests` 53, `too_hard` 6. Inputs `task-pool:v1`, `clean-corpus:v4`; generations from H200 NVL, re-run and uploaded locally. [Run](https://wandb.ai/mllab-team/onprem-codegen/runs/7b6m2nvv), commit `6388dd6`.
 
+### SFT prompt format vs benchmark format
+`sft-dataset:v0` (811 rows) against COBOLEval (146 tasks) and CobolCodeBench (46 + 46). Count of programs / task fields containing the marker (`LINKAGE SECTION`; file I/O = `SELECT … ASSIGN` or `FILE SECTION`; `ACCEPT `; `DISPLAY `):
+
+| Set | LINKAGE | file I/O | ACCEPT | DISPLAY |
+|---|---|---|---|---|
+| SFT completions, all 811 | 0 (0%) | 51 (6%) | 802 (99%) | 811 (100%) |
+| – rejection_sampling (328) | 0 | 0 | 328 | 328 |
+| – codenet_cobol (483) | 0 | 51 (11%) | 474 (98%) | 483 |
+| COBOLEval prompts (146) | 146 (100%) | 0 | 0 | 0 |
+| CobolCodeBench completion (46) | 15 (33%) | 46 (100%) | 1 | 33 |
+| CobolCodeBench instruct (46) | 1 (2%) | 46 (100%) | 1 | 33 |
+
+- All 811 SFT prompts use the `IO_STDIN` sentence; COBOLEval uses `IO_COBOLEVAL` (complete a program with a given `LINKAGE SECTION`, answer in `RESULT`), CobolCodeBench uses `IO_FILES`. No SFT row has a `LINKAGE SECTION` and only 51 touch files, so v0 teaches GnuCOBOL syntax and ACCEPT/DISPLAY programs, not the benchmark conventions. Compile rate can rise while pass@1 on the benchmarks does not.
+- **Decision: v0 is trained on the data as it is, no benchmark-format rows added.** Building LINKAGE or file-I/O training tasks needs a new task source and a second decontamination against the same benchmarks; v0 is cheap and shows how much transfers. If compile rate rises but COBOLEval / CobolCodeBench pass@1 stays inside the baseline CI, the next step is benchmark-format instruction data (Phase 4, `IO_COBOLEVAL` / `IO_FILES`).
+
 ### baseline eval (Qwen/Qwen3.8-27B, no adapter)
 vLLM on 1× A100 80 GB, `base`. Pass@1 as fractions; pass@10 only for sampled decoding. Frozen copy of this table, 95% bootstrap CIs per group, the artifact map and the `baseline-final-*` aliases: [baseline.md](baseline.md). `eval.report` adds a paired Δ pass@1 CI to the base vs adapted table and `--ci-of results.jsonl...` prints the single-run CI table (bootstrap over tasks, 2000 resamples, seed 0).
 
