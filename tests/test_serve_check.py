@@ -60,3 +60,8 @@ def test_adapter_missing_from_model_list_is_reported_without_a_request(serve):
 def test_adapter_listed_but_failing_is_reported(serve):
     res = check(serve(["base", "cobol"], broken={"cobol"}))
     assert res["base"] is None and "404" in res["cobol"]
+
+
+def test_unreachable_server_is_reported_for_every_model():
+    res = check("http://127.0.0.1:1/v1")    # nothing listens on port 1
+    assert set(res) == {"base", "cobol"} and all("unreachable" in e for e in res.values())

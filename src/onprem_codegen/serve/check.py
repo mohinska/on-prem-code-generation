@@ -21,8 +21,11 @@ PROMPT = "Write a complete GnuCOBOL program in fixed format that displays HELLO.
 def check(base_url: str, models=("base", "cobol")) -> dict[str, str | None]:
     """{model: None if it answered, else the error}."""
     base_url = base_url.rstrip("/")
-    with urllib.request.urlopen(f"{base_url}/models", timeout=30) as r:
-        listed = {m["id"] for m in json.load(r)["data"]}
+    try:
+        with urllib.request.urlopen(f"{base_url}/models", timeout=30) as r:
+            listed = {m["id"] for m in json.load(r)["data"]}
+    except OSError as e:   # tunnel down, or vLLM still loading (the tunnel answers with a reset)
+        return {m: f"server unreachable at {base_url}: {e}" for m in models}
     out: dict[str, str | None] = {}
     for model in models:
         if model not in listed:

@@ -17,5 +17,7 @@ uv pip install -q --python "$VENV/bin/python" "vllm==${VLLM_VERSION:-0.32.0}" to
 
 rm -rf /adapters/cobol
 "$VENV/bin/wandb" artifact get "$WANDB_ENTITY/$WANDB_PROJECT/$ADAPTER" --root /adapters/cobol
+# Text-only adapter keys lack `language_model`: without this vLLM loads it but applies nothing (cobol == base).
+PYTHONPATH=src python -m onprem_codegen.serve.adapter_keys /adapters/cobol
 
 PATH="$VENV/bin:$PATH" exec bash docker/serve-entrypoint.sh   # MAX_NUM_SEQS=256 is its default
