@@ -1,0 +1,28 @@
+# Baseline, thinking mode, HumanEval-Python only (regression check for forgetting), 10 samples per task.
+# Completes configs/eval/baseline-thinking.yaml (COBOLEval only). Same protocol otherwise.
+#   python -m onprem_codegen.eval.run --config configs/eval/baseline-thinking-humaneval.yaml --stage generate
+run_name: baseline-thinking-humaneval
+model_name: Qwen/Qwen3.8-27B
+adapter: null
+
+server:
+  base_url: http://localhost:8000/v1
+  model: base
+  request_timeout_s: 14400
+  concurrency: 8
+
+benchmarks:
+  humaneval_python: [completion]
+modes: [thinking]
+decodings: [greedy, sampled]          # thinking has no greedy in the manifest, so only sampled runs
+seed: 1234
+
+protocol_overrides:
+  thinking:
+    sampled: {n: 10}                  # the minimum for pass@10
+
+execute:
+  timeout_s: 10.0
+  workers: 4
+ks: [1, 10]
+out_dir: outputs/eval
