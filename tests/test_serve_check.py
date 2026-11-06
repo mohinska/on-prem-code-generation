@@ -5,10 +5,10 @@ from http.server import BaseHTTPRequestHandler, HTTPServer
 
 import pytest
 
-from onprem_codegen.serve.check import check
+from onprem_codegen.serve.check import adapter_effect, check
 
 
-def _server(listed, broken=()):
+def _server(listed, broken=(), ignored=False):
     class H(BaseHTTPRequestHandler):
         def log_message(self, *a):
             pass
@@ -24,6 +24,9 @@ def _server(listed, broken=()):
 
         def do_POST(self):
             model = json.loads(self.rfile.read(int(self.headers["Content-Length"])))["model"]
+            if self.path.endswith("/completions") and not self.path.endswith("chat/completions"):   # scoring request
+                lp = [None, -1.0, -2.0] if (model == "base" or ignored) else [None, -0.5, -2.5]
+                return self._send(200, {"choices": [{"logprobs": {"token_logprobs": lp}}]})
             if model in broken:   # vLLM answers 4xx for an adapter it could not load
                 return self._send(404, {"error": f"model {model} not found"})
             self._send(200, {"choices": [{"index": 0, "finish_reason": "stop",
@@ -65,3 +68,11 @@ def test_adapter_listed_but_failing_is_reported(serve):
 def test_unreachable_server_is_reported_for_every_model():
     res = check("http://127.0.0.1:1/v1")    # nothing listens on port 1
     assert set(res) == {"base", "cobol"} and all("unreachable" in e for e in res.values())
+
+
+def test_adapter_that_changes_the_logprobs_has_an_effect(serve):
+    assert adapter_effect(serve(["base", "cobol"])) == 0.5
+
+
+def test_adapter_that_vllm_silently_ignored_has_no_effect(serve):
+    assert adapter_effect(serve(["base", "cobol"], ignored=True)) == 0.0

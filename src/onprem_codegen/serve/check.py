@@ -15,6 +15,10 @@ import urllib.request
 
 from onprem_codegen.eval.generate import VllmClient
 
+# A fixed COBOL text scored by both models: the adapter must change its token logprobs.
+SCORED = ("       IDENTIFICATION DIVISION.\n       PROGRAM-ID. FACTORIAL.\n       DATA DIVISION.\n"
+          "       WORKING-STORAGE SECTION.\n       01 N PIC 9(9).\n       PROCEDURE DIVISION.\n"
+          "           ACCEPT N FROM STDIN\n           DISPLAY N\n           STOP RUN.")
 PROMPT = "Write a complete GnuCOBOL program in fixed format that displays HELLO. Answer with a single ```cobol code block."
 
 
@@ -40,13 +44,31 @@ def check(base_url: str, models=("base", "cobol")) -> dict[str, str | None]:
     return out
 
 
+def adapter_effect(base_url: str, adapter: str = "cobol", base: str = "base") -> float:
+    """Max |logprob difference| of the adapter vs the base model on SCORED. 0.0 means vLLM loaded the adapter but
+    applied nothing (this happened when the adapter keys lacked `language_model`, see serve/adapter_keys.py)."""
+    def logprobs(model):
+        body = {"model": model, "prompt": SCORED, "max_tokens": 1, "temperature": 0, "echo": True, "logprobs": 0}
+        req = urllib.request.Request(f"{base_url.rstrip('/')}/completions", data=json.dumps(body).encode(),
+                                     headers={"Content-Type": "application/json"})
+        with urllib.request.urlopen(req, timeout=300) as r:
+            return [x for x in json.load(r)["choices"][0]["logprobs"]["token_logprobs"] if x is not None]
+    return max(abs(a - b) for a, b in zip(logprobs(base), logprobs(adapter)))
+
+
 def main() -> None:
     ap = argparse.ArgumentParser(description="Check that base and the cobol adapter both answer.")
     ap.add_argument("--base-url", default="http://localhost:8000/v1")
-    res = check(ap.parse_args().base_url)
+    base_url = ap.parse_args().base_url
+    res = check(base_url)
     for model, err in res.items():
         print(f"{model:6} {'ok' if err is None else 'FAIL ' + err}")
-    raise SystemExit(any(res.values()))
+    failed = any(res.values())
+    if not failed:
+        effect = adapter_effect(base_url)
+        print(f"adapter effect (max logprob diff) {effect:.4f}", "ok" if effect > 1e-3 else "FAIL: adapter is not applied")
+        failed = effect <= 1e-3
+    raise SystemExit(failed)
 
 
 if __name__ == "__main__":

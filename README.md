@@ -116,7 +116,8 @@ Smoke test without a custom image: start from `pytorch/pytorch:2.11.0-cuda12.8-c
 (`wandb artifact get <entity>/<project>/adapter:production --root /adapters/cobol`), run `serve-entrypoint.sh`,
 then tunnel with `ssh -p <PORT> root@<HOST> -N -L 8000:localhost:8000`. `localhost:8000/v1/models` lists `base` and `cobol`.
 On a plain PyTorch-template instance without Docker: `ADAPTER=<name:alias> bash scripts/vast_serve.sh` (own venv for vLLM, fetches the adapter, serves).
-`python -m onprem_codegen.serve.check` through the tunnel checks that both models answer.
+`python -m onprem_codegen.serve.check` through the tunnel checks that both models answer and that the adapter changes the logprobs.
+Unattended run on one instance (train sft-v0, serve it, generate the non-thinking eval; stops at the first failure): `bash scripts/overnight.sh 2>&1 | tee overnight.log` in tmux.
 
 ## Eval
 
