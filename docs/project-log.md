@@ -151,5 +151,14 @@ vLLM on 1× A100 80 GB, `base`. Pass@1 as fractions; pass@10 only for sampled de
 - **Estimate for SFT v0 (2.1):** 45 steps per epoch × 15.3 s ≈ 11.5 min per epoch, plus eval and checkpoint uploads (~1–2 min each at `save_steps` 5; use a larger `save_steps` for the real run); 2 epochs ≈ 25–30 min. The planned 1.5 h per epoch assumed longer rows and slower steps.
 - Eval loss was still falling at step 25, with 712 train rows only; no sign of overfitting yet.
 
+### Serving the LoRA adapter in vLLM (1.2)
+vLLM 0.32.0 (own venv, torch 2.13.0, `--max-num-seqs 256`), model `Qwen3_5ForConditionalGeneration`, 1× RTX PRO 6000 Blackwell (98 GB), `base` + `cobol` = `sft-b1-adapter:candidate` (B1, 25 steps), `scripts/vast_serve.sh`, check `python -m onprem_codegen.serve.check`.
+
+- **Problem found:** with the adapter as trained, both models answered and `serve.check` said `ok`, but `cobol` was identical to `base`: on a fixed 64-token COBOL text the sum of token logprobs was −66.002127 for both (max difference 0.000000), and a 181-token generation matched token by token. The server log had no error, only `Loaded new LoRA adapter: name 'cobol'` and a `_lora_expand_kernel` run. Cause: the text-only trainer saves keys `base_model.model.model.layers.N…`, vLLM serves the multimodal model and looks LoRA weights up under `model.language_model.layers.N…`, so none of the 496 LoRA modules matched (0 of 496 found in the base checkpoint's tensor names) and vLLM applied nothing, silently.
+- **Fix:** `serve/adapter_keys.py` renames the keys (992 tensors) after the adapter is fetched; all 496 modules then match the base checkpoint names. Commit `25a9f2f`.
+- **After the fix:** same fixed text, sum of logprobs base −66.0021, cobol −62.9725 (max difference 3.2013 over 64 tokens); the generated factorial program differs from base (variable names `WS-N`, `000-MAIN` like the SFT data). Base ↔ adapter toggle by the `model` field works, merging the adapter into the weights is not needed.
+- LoRA on the Gated DeltaNet projections (`in_proj_a/b/qkv/z`, `out_proj`) is accepted by vLLM 0.32.0. Warnings about `visual.*` modules being ignored are harmless (text-only adapter).
+- Not done: the rename is not applied at training time, only when serving (`train/sft.py` still saves the original keys).
+
 ### still missing
 SFT results (A, C), thinking baseline on CobolCodeBench (not run, see above), CodeNet licence (C), reports.
