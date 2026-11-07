@@ -62,7 +62,7 @@ Keep this section up to date whenever you add, move or remove a top-level direct
 │   ├── data/                # collect, filters, dedup, decontaminate, clean, CodeNet, rejection sampling,
 │   │                        # held-out task split, v1-lite builder (GOBACK), completion rows
 │   ├── train/               # SFT (DPO, GRPO planned)
-│   ├── eval/                # sandboxed execute(), benchmark loader, generate -> execute -> metrics -> W&B, held-out test
+│   ├── eval/                # sandboxed execute(), benchmark loader, generate -> execute -> metrics -> W&B, held-out test, sft-v1 verdict
 │   └── serve/               # adapter key fix for vLLM, server check
 ├── tests/
 ├── tasks/                   # local plans (gitignored)
