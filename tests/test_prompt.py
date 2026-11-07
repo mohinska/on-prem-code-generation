@@ -28,3 +28,9 @@ def test_empty_task_rejected():
 
 def test_messages_single_user_turn_no_system():
     assert build_messages("T") == [{"role": "user", "content": build_prompt("T")}]
+
+
+def test_io_complete_sentence_goes_into_the_instruction():
+    from onprem_codegen.prompt import IO_COMPLETE
+    assert IO_COMPLETE in build_prompt("T", IO_COMPLETE)
+    assert "DATA DIVISION" in IO_COMPLETE and "unchanged" in IO_COMPLETE

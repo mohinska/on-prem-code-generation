@@ -11,6 +11,8 @@ import re
 IO_STDIN = "Read input from standard input with ACCEPT and write the result to standard output with DISPLAY."
 IO_COBOLEVAL = ("Complete the program above: keep its PROGRAM-ID and LINKAGE SECTION unchanged\n"
                 "and store the answer in RESULT.")
+IO_COMPLETE = ("Continue the program above from its DATA DIVISION onwards and keep the lines already written\n"
+               "unchanged; answer with the remaining lines only.")
 IO_FILES = "Read input from the files named above and write the results to the output files named above."
 
 
