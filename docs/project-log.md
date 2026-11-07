@@ -124,7 +124,27 @@ Tokens counted with the Qwen3.8 tokenizer on prompt + completion (chat template 
 `configs/eval/sft-v0.yaml` (same protocol as the frozen baseline, differs only in `run_name`, `adapter`, `server.model` = `cobol`, `modes` = non-thinking), vLLM 0.32.0 serving `sft-v0-adapter:candidate` as `cobol`, `serve.check` passed (both models answer and the adapter changes the logprobs), commit `9c4da41`. [Run sft-v0-generate](https://wandb.ai/mllab-team/onprem-codegen/runs/o47hz4el), 3 h 7 min, artifact `eval-generations:sft-v0` (v4, 9246 rows).
 
 - Rows per group are identical to the baseline (COBOLEval greedy 438 / sampled 2920, CobolCodeBench completion 138 / 920 and instruct 138 / 920, HumanEval-Python 492 / 3280). `finish_reason` stop 8713, length 533 (5.8%).
-- Execution of the generations (sandbox, Docker) and the base vs adapted table: pending (3.2, 3.4).
+- Execution (3.2): local Docker sandbox (GnuCOBOL 3.2.0), [run ke91f26o](https://wandb.ai/mllab-team/onprem-codegen/runs/ke91f26o), `eval-results:sft-v0` (v6), commit `9c4da41`. Full report with the base vs adapted table, CIs and diagnostics: [sft-v0.md](sft-v0.md).
+
+### sft-v0 results (non-thinking, frozen protocol)
+pass@1 / pass@10 / compile rate as fractions, Δ pass@1 with the 95% paired bootstrap CI over tasks (2000 resamples, seed 0).
+
+| Group | pass@1 base → sft-v0 | Δ pass@1 [CI] | pass@10 base → sft-v0 | compile base → sft-v0 | truncated base → sft-v0 |
+|---|---|---|---|---|---|
+| COBOLEval greedy | 0.043 → 0.000 | −0.043 [−0.075, −0.016] | | 0.114 → 0.000 | 0.016 → 0.034 |
+| COBOLEval sampled | 0.019 → 0.003 | −0.015 [−0.023, −0.009] | 0.150 → 0.028 | 0.097 → 0.141 | 0.006 → 0.021 |
+| CobolCodeBench completion greedy | 0.007 → 0.000 | −0.007 [−0.022, +0.000] | | 0.116 → 0.094 | 0.304 → 0.565 |
+| CobolCodeBench completion sampled | 0.008 → 0.020 | +0.012 [+0.000, +0.027] | 0.048 → 0.083 | 0.111 → 0.134 | 0.102 → 0.325 |
+| CobolCodeBench instruct greedy | 0.000 → 0.000 | +0.000 [+0.000, +0.000] | | 0.145 → 0.130 | 0.116 → 0.101 |
+| CobolCodeBench instruct sampled | 0.001 → 0.000 | −0.001 [−0.003, +0.000] | 0.011 → 0.000 | 0.109 → 0.155 | 0.045 → 0.067 |
+| HumanEval-Python greedy | 0.972 → 0.959 | −0.012 [−0.043, +0.018] | | 0.998 → 1.000 | 0.002 → 0.000 |
+| HumanEval-Python sampled | 0.969 → 0.934 | −0.034 [−0.057, −0.014] | 0.994 → 0.986 | 0.999 → 0.999 | 0.001 → 0.001 |
+
+- Success criterion (COBOLEval pass@1 above the baseline outside the CI, compile rate up, HumanEval-Python down by at most 2 points): **not met**.
+- COBOLEval failures come from two format artifacts, measured locally on the stored generations (no W&B, protocol untouched): the first program line loses its indentation because `build_prompt` strips the task text, and sft-v0 copies it (417 of 423 greedy compile errors are `invalid indicator 'F' at column 7`; baseline answers are indented in 402 of 438 greedy cases, sft-v0 in 0); with the indentation restored the compile rate of sft-v0 is 0.646 greedy / 0.589 sampled (baseline 0.121 / 0.132) but pass@1 stays lower (greedy 0.043 → 0.007, Δ −0.037 [−0.071, −0.005]; sampled 0.030 → 0.013, Δ −0.016 [−0.028, −0.004]; pass@10 0.196 → 0.088, Δ −0.108 [−0.168, −0.050]). 264 of its 271 greedy wrong outputs contain `STOP RUN` (799 of the 811 training programs contain it, none ends a subprogram with `GOBACK`); in COBOLEval the program is called as a subprogram.
+- Second diagnostic (indentation restored and `STOP RUN` rewritten to `GOBACK` in the stored answers of both models, local, no W&B, 3358 answers each): COBOLEval greedy pass@1 0.062 → 0.322 (Δ +0.260 [+0.192, +0.326]), sampled pass@1 0.058 → 0.264 (Δ +0.207 [+0.168, +0.249]), sampled pass@10 0.300 → 0.608 (Δ +0.308 [+0.240, +0.373]); greedy `ok` 27 → 141 programs. Post hoc and it edits the model answer, so it explains the frozen result and is not a result of sft-v0; it motivates `sft-v1` (prompt fix, `GOBACK` in the training data).
+- The frozen baseline understates the base model on COBOLEval for the same indentation reason (sampled pass@1 0.019 → 0.030 when the first line is indented).
+- Unbiased test on the training distribution: not possible with the current `task-pool`; only 19 of the 1755 tasks outside the training set had a passing base sample, so base and adapted cannot be compared fairly on them.
 
 ### SFT prompt format vs benchmark format
 `sft-dataset:v0` (811 rows) against COBOLEval (146 tasks) and CobolCodeBench (46 + 46). Count of programs / task fields containing the marker (`LINKAGE SECTION`; file I/O = `SELECT … ASSIGN` or `FILE SECTION`; `ACCEPT `; `DISPLAY `):
