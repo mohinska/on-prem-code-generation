@@ -144,10 +144,21 @@ else
             eval-generations:sft-v1-seed2 eval-generations:heldout-sft-v1 eval-generations:heldout-sft-v1-seed2)
 fi
 step_verify_wandb() { x verify_wandb "${EXPECTED[@]}"; }
+# `vastai destroy instance` asks "[y/N]": without -y it waits on stdin in tmux, or reads EOF, prints "Aborted." and
+# exits 0, so nothing is destroyed and nothing fails (that is what happened after sft-v0). If this process is still
+# alive 3 min after the call, the destroy did not happen: fail loudly so the instance is not left running unnoticed.
 step_destroy() {
-  if [ "$DRY" = 1 ]; then echo '+ vastai destroy instance $CONTAINER_ID --api-key $CONTAINER_API_KEY'; return; fi
-  pip install -q vastai
-  vastai destroy instance "$CONTAINER_ID" --api-key "$CONTAINER_API_KEY"
+  local cmd='$VENV/bin/vastai destroy instance $CONTAINER_ID -y --api-key $CONTAINER_API_KEY < /dev/null'
+  if [ "$DRY" = 1 ]; then
+    echo "+ uv pip install -q --python $VENV/bin/python vastai"
+    echo "+ ${cmd//\$VENV/$VENV}"
+    echo "+ sleep 180; echo 'instance still running: destroy it by hand'; exit 1"
+    return
+  fi
+  uv pip install -q --python "$VENV/bin/python" vastai
+  "$VENV/bin/vastai" destroy instance "$CONTAINER_ID" -y --api-key "$CONTAINER_API_KEY" < /dev/null
+  sleep 180
+  echo "instance $CONTAINER_ID still running 3 min after destroy: destroy it by hand (console or vastai)"; return 1
 }
 
 # ---------- queue ----------

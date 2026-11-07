@@ -99,3 +99,12 @@ def test_missing_env_stops_before_any_step(tmp_path, missing):
     r = _run(tmp_path, **{"ROLE": "base", missing: ""})
     assert r.returncode != 0 and missing in r.stdout + r.stderr and not _steps(r.stdout)
     _no_secrets(r)
+
+
+def test_destroy_skips_the_confirmation_prompt_and_fails_loudly_if_the_instance_survives(tmp_path):
+    # `vastai destroy instance` asks "[y/N]"; without -y it hangs in tmux or prints "Aborted." and exits 0 (sft-v0 run).
+    r = _run(tmp_path, ROLE="base", AUTODESTROY="1", CONTAINER_ID="123")
+    destroy = r.stdout[r.stdout.index("progress step 9/9 destroy"):]
+    assert "destroy instance $CONTAINER_ID -y" in destroy and "< /dev/null" in destroy
+    assert "/workspace/vllm-env/bin/vastai" in destroy          # own venv: system pip may be externally managed
+    assert "still running" in destroy                           # the destroy is checked, not assumed
