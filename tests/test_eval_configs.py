@@ -41,3 +41,11 @@ def test_baseline_v2_is_base_non_thinking_on_prompt_affected_groups_only():
     assert new["server"]["model"] == "base" and new["modes"] == ["non_thinking"]
     assert new["benchmarks"] == {"coboleval": ["completion"], "cobolcodebench": ["completion"]}
     assert _strip(new, "benchmarks") == _strip(base, "benchmarks")
+
+
+def test_sft_v1_seed2_is_coboleval_sampled_only_on_its_own_served_model():
+    base, new = _load("baseline.yaml"), _load("sft-v1-seed2.yaml")
+    assert new["adapter"] == "sft-v1-seed2-adapter:candidate" and new["run_name"] == "sft-v1-seed2"
+    assert new["server"]["model"] == "cobol-seed2" and new["modes"] == ["non_thinking"]
+    assert new["benchmarks"] == {"coboleval": ["completion"]} and new["decodings"] == ["sampled"]
+    assert _strip(new, "benchmarks", "decodings") == _strip(base, "benchmarks", "decodings")

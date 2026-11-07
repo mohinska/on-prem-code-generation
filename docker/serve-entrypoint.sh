@@ -27,6 +27,9 @@ args=(
 if [[ -d "$ADAPTER_PATH" ]]; then
   args+=(--enable-lora --max-lora-rank "$MAX_LORA_RANK"
          --lora-modules "$ADAPTER_NAME=$ADAPTER_PATH")
+  # More adapters next to it: EXTRA_LORA_MODULES="cobol-seed2=/adapters/cobol-seed2 ..." (space-separated name=path)
+  read -ra extra <<< "${EXTRA_LORA_MODULES:-}"
+  args+=(${extra[@]+"${extra[@]}"})
 else
   echo "No adapter at $ADAPTER_PATH; serving base model only." >&2
 fi
