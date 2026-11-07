@@ -24,6 +24,7 @@ multirun/
 # Local data scratch (versioned in W&B artifacts); only manifests are committed
 data/*
 !data/manifests/
+!data/splits/
 
 # Benchmarks are downloaded at pinned commits by `make benchmarks`; never committed
 benchmarks/*

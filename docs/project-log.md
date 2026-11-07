@@ -213,5 +213,8 @@ vLLM 0.32.0 (own venv, torch 2.13.0, `--max-num-seqs 256`), model `Qwen3_5ForCon
 - LoRA on the Gated DeltaNet projections (`in_proj_a/b/qkv/z`, `out_proj`) is accepted by vLLM 0.32.0. Warnings about `visual.*` modules being ignored are harmless (text-only adapter).
 - Not done: the rename is not applied at training time, only when serving (`train/sft.py` still saves the original keys).
 
+### Held-out task split for sft-v1 (plan 0.2)
+`python -m onprem_codegen.data.split_tasks --seed 7 --fraction 0.2` on `task-pool:v1` (file sha256 `74d948eb7687716f619eeef75176308d359f47437425041aa0d01e2b97a643d7`): 421 of 2104 tasks held out, written to `data/splits/heldout_task_ids.json` (seed, fraction and pool hash inside). The choice is random and made before any sft-v1 result exists; these tasks must stay out of rejection sampling and training. Tests: `tests/test_split_tasks.py`.
+
 ### still missing
 SFT results (A, C), thinking baseline on CobolCodeBench (not run, see above), CodeNet licence (C), reports.
