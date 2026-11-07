@@ -8,7 +8,8 @@ onprem_codegen/eval/heldout.py: unbiased test on the held-out 20% of task-pool (
 
 Same prompt as SFT data and eval (`build_prompt`, no generation_hints), non-thinking, greedy x1 and sampled n 5
 with the settings of evaluation_protocol. Output per model: <out>/<model>/generations.jsonl (rows like
-eval-generations) and results.jsonl (+ verdict). Report: pass@1 / pass@5 per model, paired bootstrap CI of cobol - base.
+eval-generations) and results.jsonl (+ verdict). Report per adapter: report_<model>.json, pass@1 / pass@5 and the
+paired bootstrap CI of <model> - base.
 """
 
 from __future__ import annotations
@@ -109,9 +110,9 @@ def execute_all(tasks: dict, gen_path: Path, out: Path, executor=sandbox_executo
 
 # ---------- report ----------
 
-def report(base: list[dict], adapted: list[dict]) -> dict:
+def report(base: list[dict], adapted: list[dict], adapted_name: str = "cobol") -> dict:
     """pass@k per model and decoding; delta = adapted - base with the paired bootstrap 95% CI over tasks."""
-    rows = {"base": base, "cobol": adapted}
+    rows = {"base": base, adapted_name: adapted}
     scores = {m: {d: {k: task_scores([r for r in rs if r["decoding"] == d], k) for k in KS[d]} for d in KS}
               for m, rs in rows.items()}
     mean = lambda s: sum(s.values()) / len(s)
@@ -120,11 +121,11 @@ def report(base: list[dict], adapted: list[dict]) -> dict:
     for d in KS:
         out["delta"][d] = {}
         for k in KS[d]:
-            b, a = scores["base"][d][k], scores["cobol"][d][k]
+            b, a = scores["base"][d][k], scores[adapted_name][d][k]
             common = b.keys() & a.keys()
             out["delta"][d][f"pass@{k}"] = {"mean": mean({t: a[t] - b[t] for t in common}),
                                             "ci": list(delta_ci(b, a))}
-    out["n_tasks"] = len(scores["base"]["greedy"][1].keys() & scores["cobol"]["greedy"][1].keys())
+    out["n_tasks"] = len(scores["base"]["greedy"][1].keys() & scores[adapted_name]["greedy"][1].keys())
     return out
 
 
@@ -144,10 +145,11 @@ def main() -> None:
             generate(tasks, m, a.base_url, a.out / m)
         else:
             execute_all(tasks, a.out / m / "generations.jsonl", a.out / m)
-    if a.stage == "execute" and {"base", "cobol"} <= set(a.models):
-        rep = report(read_jsonl(a.out / "base" / "results.jsonl"), read_jsonl(a.out / "cobol" / "results.jsonl"))
-        (a.out / "report.json").write_text(json.dumps(rep, indent=1), encoding="utf-8")
-        print(json.dumps(rep, indent=1))
+    if a.stage == "execute" and "base" in a.models:
+        for m in (m for m in a.models if m != "base"):   # one report per adapter (cobol, cobol-seed2) against base
+            rep = report(read_jsonl(a.out / "base" / "results.jsonl"), read_jsonl(a.out / m / "results.jsonl"), m)
+            (a.out / f"report_{m}.json").write_text(json.dumps(rep, indent=1), encoding="utf-8")
+            print(m, json.dumps(rep, indent=1))
 
 
 if __name__ == "__main__":

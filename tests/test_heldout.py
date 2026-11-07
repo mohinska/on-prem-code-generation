@@ -127,3 +127,24 @@ def test_report_pairs_the_models_by_task(tasks, server, tmp_path):
     assert rep["delta"]["greedy"]["pass@1"]["mean"] == pytest.approx(2 / 3)
     assert 0 <= lo <= 2 / 3 <= hi   # 3 tasks: the CI is wide
     assert rep["n_tasks"] == 3
+
+
+def test_report_names_any_adapter_so_the_second_seed_can_be_compared(tasks, server, tmp_path):
+    url, _ = server
+    d = tmp_path / "cobol-seed2"
+    rows = read_jsonl(heldout.execute_all(tasks, heldout.generate(tasks, "cobol", url, d), d, fake_executor))
+    rep = heldout.report(rows, rows, adapted_name="cobol-seed2")
+    assert rep["cobol-seed2"]["greedy"]["pass@1"] == rep["base"]["greedy"]["pass@1"]
+    assert rep["delta"]["greedy"]["pass@1"]["mean"] == 0
+
+
+def test_execute_cli_writes_one_report_per_adapter(tasks, server, tmp_path, monkeypatch):
+    url, _ = server
+    for m in ("base", "cobol", "cobol-seed2"):
+        heldout.execute_all(tasks, heldout.generate(tasks, "cobol" if m != "base" else "base", url, tmp_path / m),
+                            tmp_path / m, fake_executor)
+    monkeypatch.setattr(heldout, "load_tasks", lambda *a: tasks)
+    monkeypatch.setattr(heldout, "sandbox_executor", fake_executor)
+    monkeypatch.setattr("sys.argv", ["heldout", "execute", "--models", "base", "cobol", "cobol-seed2", "--out", str(tmp_path)])
+    heldout.main()
+    assert (tmp_path / "report_cobol.json").exists() and (tmp_path / "report_cobol-seed2.json").exists()
