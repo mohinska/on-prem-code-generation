@@ -2,8 +2,9 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
-**Status:** in progress. `data/`, `train/sft.py`, `eval/` and `prompt.py` exist, with `requirements.txt`, Makefile,
-configs and tests. Not written yet: DPO/GRPO, `serve/`, W&B registry step (`make register`).
+**Status:** in progress. `data/`, `train/sft.py`, `eval/`, `serve/` (adapter key fix, check) and `prompt.py` exist, with
+`requirements.txt`, Makefile, configs and tests; `sft-v0` done, `sft-v1` ready to run (`scripts/sft_v1_queue.sh`).
+Not written yet: DPO/GRPO, W&B registry step (`make register`).
 
 ## Project goal
 Domain-adapt an open code model to a low-resource / legacy programming language, fully self-hostable
@@ -78,7 +79,7 @@ configs/                 # Hydra configs per stage
 data/manifests/          # committed source manifests; rest of data/ is gitignored scratch
 docker/                  # train, serve, eval-sandbox images
 docs/                    # project brief, setup notes, project-log.md (running log), evaluation reports
-scripts/                 # Vast.ai instance bootstrap
+scripts/                 # Vast.ai bootstrap, serving, one-off sft-v1 queue
 src/onprem_codegen/      # data/ train/ eval/ serve/ — run as `python -m onprem_codegen.<stage>...`
                          # prompt.py: build_prompt, shared by SFT data and eval
 tests/

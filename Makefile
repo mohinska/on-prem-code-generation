@@ -2,7 +2,7 @@
 PY ?= python
 export PYTHONPATH := src
 
-.PHONY: test codenet data sft-data decontam train train-smoke train-dryrun benchmarks eval eval-generate eval-execute
+.PHONY: test codenet data sft-data decontam train train-smoke benchmarks eval eval-generate eval-execute
 
 test:
 	$(PY) -m pytest -q
@@ -21,17 +21,15 @@ data: codenet
 sft-data:
 	$(PY) -m onprem_codegen.data.rejection_sampling $(ARGS)
 
-# Check a sft-dataset version against the benchmarks; no hits -> alias `decontaminated` (what `make train` pulls)
-# make decontam ARGS="--artifact sft-dataset:v1"
+# Check one sft-dataset version against the benchmarks; no hits -> alias `decontaminated` (what `make train` pulls).
+# Name the version explicitly: `latest` is v1-lite, and moving `decontaminated` off v0 would change `make train`.
+# make decontam ARGS="--artifact sft-dataset:v0"
 decontam:
-	$(PY) -m onprem_codegen.data.decontaminate --artifact sft-dataset:latest $(ARGS)
+	@test -n "$(ARGS)" || { echo 'usage: make decontam ARGS="--artifact sft-dataset:vN"'; exit 1; }
+	$(PY) -m onprem_codegen.data.decontaminate $(ARGS)
 
 train-smoke:
 	$(PY) -m onprem_codegen.train.sft
-
-# B1 dry run: 27B at real length; kill after the step-10 checkpoint artifact, delete checkpoints/sft-dryrun, rerun
-train-dryrun:
-	$(PY) -m onprem_codegen.train.sft run_name=sft-dryrun train.max_steps=20 train.max_length=4096 train.save_steps=10 $(ARGS)
 
 # make train ARGS="run_name=sft-v1"
 train:

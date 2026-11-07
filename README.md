@@ -3,7 +3,8 @@
 Domain-adapts an open code model to COBOL and serves it on our own hardware, with no external model APIs.
 Every dataset, run, sweep and eval is tracked in Weights & Biases. Project brief: [docs/one-pager.pdf](docs/one-pager.pdf).
 
-> **Status:** in progress. Data (collect, clean, CodeNet task pool, rejection sampling), SFT and the baseline eval exist.
+> **Status:** in progress. Data, SFT, baseline eval, serving and `sft-v0` are done ([interim report](docs/interim-report.md)).
+> `sft-v1` (fixed prompt, `GOBACK` data, completion rows) is ready to run: see [sft-v1 run](#sft-v1-run).
 > Preference tuning and the model registry are not written yet.
 
 ## Pipeline
@@ -54,16 +55,17 @@ Keep this section up to date whenever you add, move or remove a top-level direct
 ├── data/                    # local scratch, gitignored except manifests/ (one YAML per source)
 ├── docker/                  # train, serve, eval-sandbox images
 ├── docs/                    # project brief, dataset plan, contracts, project-log.md, evaluation reports
-├── scripts/                 # vast_onstart.sh: bootstrap a Vast.ai instance
+├── scripts/                 # vast_onstart.sh (bootstrap), vast_serve.sh (serve base + adapter), sft_v1_queue.sh (one-off sft-v1 run)
 ├── src/onprem_codegen/
 │   ├── prompt.py            # build_prompt, shared by SFT data and eval
 │   ├── utils.py
-│   ├── data/                # collect, filters, dedup, decontaminate, clean, CodeNet, rejection sampling, held-out task split
+│   ├── data/                # collect, filters, dedup, decontaminate, clean, CodeNet, rejection sampling,
+│   │                        # held-out task split, v1-lite builder (GOBACK), completion rows
 │   ├── train/               # SFT (DPO, GRPO planned)
-│   ├── eval/                # sandboxed execute(), benchmark loader, generate -> execute -> metrics -> W&B
-│   └── serve/               # adapter export, demo client helpers (planned)
+│   ├── eval/                # sandboxed execute(), benchmark loader, generate -> execute -> metrics -> W&B, held-out test
+│   └── serve/               # adapter key fix for vLLM, server check
 ├── tests/
-├── tasks/                   # plan and todo
+├── tasks/                   # local plans (gitignored)
 ├── docker-compose.yml       # local GPU box only
 ├── Makefile                 # entry points
 └── .env.example
@@ -83,7 +85,8 @@ make test
 | `make codenet` | CodeNet COBOL parts and `task-pool` artifact |
 | `make data` | `raw-corpus` then `clean-corpus` |
 | `make sft-data` | rejection sampling against the vLLM server, then `sft-dataset` |
-| `make train` | SFT (`make train-smoke` for a smoke run, `make train-dryrun` for the 27B kill-and-resume check) |
+| `make train` | SFT (`make train-smoke` for a smoke run) |
+| `make decontam ARGS="--artifact sft-dataset:vN"` | check one dataset version against the benchmarks |
 | `make benchmarks` | fetch pinned benchmarks, log `benchmark-*` artifacts |
 | `make eval` | generate, execute, metrics (also `eval-generate`, `eval-execute`) |
 
@@ -109,8 +112,27 @@ python -m onprem_codegen.train.sft ...
 vastai destroy instance <INSTANCE_ID>
 ```
 
-Smoke test without a custom image: start from `pytorch/pytorch:2.11.0-cuda12.8-cudnn9-devel` with
-`--onstart scripts/vast_onstart.sh`.
+Without a custom image: start from `pytorch/pytorch:2.11.0-cuda12.8-cudnn9-devel` with
+`--onstart scripts/vast_onstart.sh` (clones the repo, installs `requirements.txt`, downloads the base weights).
+
+## sft-v1 run
+
+Criteria are fixed before training in [docs/sft-v1-preregistration.md](docs/sft-v1-preregistration.md).
+`scripts/sft_v1_queue.sh` has two roles, so two instances run in parallel (both started with `vast_onstart.sh`):
+
+| Role | What it does |
+|---|---|
+| `ROLE=base` | serves the base model, generates baseline v2 (prompt fix) and the held-out set for `base`; needs no training |
+| `ROLE=adapter` | trains `sft-v1` (seed 42) and `sft-v1-seed2` (seed 43) on `sft-dataset:decontaminated-v1`, serves both adapters, generates sft-v1, seed 2 and their held-out sets |
+
+```bash
+tmux new -s q
+cd /workspace/on-prem-code-generation && ROLE=adapter bash scripts/sft_v1_queue.sh   # or ROLE=base
+grep -h progress outputs/sft-v1-queue/adapter/queue.log outputs/sft-v1-queue/adapter/logs/*.log | tail   # progress
+```
+
+`DRY_RUN=1` prints every command; a re-run skips finished steps; `AUTODESTROY=1` destroys the instance once W&B
+holds every artifact of the role (use it after one run without it). Generations go to W&B; execute them locally (next section).
 
 Serving a trained model is described in [Run the trained model](#run-the-trained-model).
 
@@ -164,6 +186,15 @@ docker build -f docker/eval-sandbox.Dockerfile -t onprem-codegen/eval-sandbox . 
 make benchmarks
 make eval-generate                                                  # on the Vast instance
 make eval-execute ARGS="--generations eval-generations:baseline"    # locally, in the sandbox
+```
+
+Held-out CodeNet tasks (`data/splits/heldout_task_ids.json`, never trained on), for the "training works" criterion:
+
+```bash
+for m in base:heldout-base cobol:heldout-sft-v1 cobol-seed2:heldout-sft-v1-seed2; do
+  wandb artifact get "$WANDB_ENTITY/$WANDB_PROJECT/eval-generations:${m#*:}" --root "outputs/eval/heldout/${m%%:*}"
+done
+PYTHONPATH=src python -m onprem_codegen.eval.heldout execute --models base cobol cobol-seed2   # report_<model>.json
 ```
 
 ## Local GPU box
