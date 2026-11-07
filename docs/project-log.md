@@ -108,6 +108,24 @@ Tokens counted with the Qwen3.8 tokenizer on prompt + completion (chat template 
 - Epochs: with 712 train rows B1 used 0.56 of an epoch in 25 steps and eval loss was still falling (0.419 → 0.313). Proposed for `sft-v0`: 3 epochs (≈ 135 steps ≈ 35 min), one checkpoint and eval per epoch (`save_steps` 45), keep the checkpoint with the lowest eval loss.
 - Manual review of 20 random rows (10 per source, seed 13): **go**. Thresholds are met (811 rows ≥ 500, 349 tasks ≥ 200). `sft-v0` settings: `sft.yaml` as is (lr 2e-4, r 16, alpha 32, batch 1 × accumulation 16, `max_length` 4096, `eval_fraction` 0.1) with `train.num_train_epochs=3`, `train.save_steps=44` (one checkpoint and eval per epoch), `train.logging_steps=5`.
 
+### sft-v0 (SFT, 2.1)
+`--config-name sft run_name=sft-v0 train.num_train_epochs=3 train.save_steps=44 train.logging_steps=5` on `sft-dataset:decontaminated` (v0): QLoRA 4-bit, r 16, alpha 32, dropout 0.05, lr 2e-4 cosine, batch 1 × accumulation 16, `max_length` 4096, 712 train / 99 eval rows (split by task), 135 steps, 1× RTX PRO 6000 Blackwell (98 GB), commit `9c4da41`, started 2026-11-06 22:11 UTC and finished 23:02 UTC. [Run sft-v0](https://wandb.ai/mllab-team/onprem-codegen/runs/sft-v0), run through `scripts/overnight.sh`.
+
+| Step | 44 | 88 | 132 | 135 (end) |
+|---|---|---|---|---|
+| Eval loss | 0.2170 | 0.1793 | 0.1752 | 0.1752 |
+| Eval mean token accuracy | 0.9339 | 0.9438 | 0.9453 | 0.9457 |
+
+- Train loss 0.55 (first logged) → 0.137 (mean of the last 5 logs). Eval loss flattens between epochs 2 and 3 and does not rise, so the last checkpoint is used. Median 15.2 s per step, peak memory 26.2 GB, 116 727 808 trainable parameters.
+- Outputs: `sft-v0-adapter:candidate` (v0), `sft-v0-ckpt` v0–v3 (`step-44`, `step-88`, `step-132`, `step-135`), samples table in the run.
+- The W&B owner of the run is `irynkasv`: the instance used the W&B key stored in the Vast account environment variables.
+
+### sft-v0 generation (non-thinking, 3.1)
+`configs/eval/sft-v0.yaml` (same protocol as the frozen baseline, differs only in `run_name`, `adapter`, `server.model` = `cobol`, `modes` = non-thinking), vLLM 0.32.0 serving `sft-v0-adapter:candidate` as `cobol`, `serve.check` passed (both models answer and the adapter changes the logprobs), commit `9c4da41`. [Run sft-v0-generate](https://wandb.ai/mllab-team/onprem-codegen/runs/o47hz4el), 3 h 7 min, artifact `eval-generations:sft-v0` (v4, 9246 rows).
+
+- Rows per group are identical to the baseline (COBOLEval greedy 438 / sampled 2920, CobolCodeBench completion 138 / 920 and instruct 138 / 920, HumanEval-Python 492 / 3280). `finish_reason` stop 8713, length 533 (5.8%).
+- Execution of the generations (sandbox, Docker) and the base vs adapted table: pending (3.2, 3.4).
+
 ### SFT prompt format vs benchmark format
 `sft-dataset:v0` (811 rows) against COBOLEval (146 tasks) and CobolCodeBench (46 + 46). Count of programs / task fields containing the marker (`LINKAGE SECTION`; file I/O = `SELECT … ASSIGN` or `FILE SECTION`; `ACCEPT `; `DISPLAY `):
 
