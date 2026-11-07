@@ -50,5 +50,4 @@ benchmarks/*
 # W&B artifact downloads
 artifacts/
 
-# Local planning notes
-tasks/
+/tasks
