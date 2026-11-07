@@ -6,6 +6,7 @@
 Only the I/O sentence depends on the task: stdin/stdout for task-pool (SFT data, the default),
 and one sentence per benchmark whose programs do I/O differently (IO_* below).
 """
+import re
 
 IO_STDIN = "Read input from standard input with ACCEPT and write the result to standard output with DISPLAY."
 IO_COBOLEVAL = ("Complete the program above: keep its PROGRAM-ID and LINKAGE SECTION unchanged\n"
@@ -19,9 +20,10 @@ def instruction(io: str = IO_STDIN) -> str:
 
 def build_prompt(task_text: str, io: str = IO_STDIN) -> str:
     """Raw user message, not chat-templated; the trainer / vLLM apply the model's own template."""
-    task_text = task_text.strip()
-    if not task_text:
+    if not task_text.strip():
         raise ValueError("empty task text")
+    # Fixed-format COBOL starts in column 8: drop blank lines and trailing space, keep the first line's indent.
+    task_text = re.sub(r"\A(?:[ \t]*\n)+", "", task_text).rstrip()
     return f"{task_text}\n\n{instruction(io)}"
 
 
