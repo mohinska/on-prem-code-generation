@@ -9,7 +9,7 @@ import re
 
 from onprem_codegen.prompt import IO_COMPLETE, IO_STDIN, build_prompt, instruction
 
-_DATA_DIV = re.compile(r"^[ \t]*DATA DIVISION\.", re.M | re.I)  # a comment line has '*' first, so no match
+_DATA_DIV = re.compile(r"^[ \t]*DATA[ \t]+DIVISION\.", re.M | re.I)  # a comment line has '*' first, so no match
 _FENCE = re.compile(r"\A```cobol\n(.*)```\Z", re.S)
 
 

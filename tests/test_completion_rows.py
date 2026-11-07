@@ -71,3 +71,10 @@ def test_blank_lines_before_data_division_go_to_the_answer_so_the_round_trip_sta
     for r in (r for r in out if is_completion(r)):
         prefix = r["prompt"].split("\n\n", 1)[1].rsplit("\n\n", 1)[0] + "\n"
         assert prefix + r["completion"].removeprefix("```cobol\n").removesuffix("```") == prog
+
+
+def test_data_division_with_padded_spaces_or_lower_case_is_split_too():
+    for header in ("       DATA                             DIVISION.\n", "       data division.\n"):
+        prog = PROG.replace("       DATA DIVISION.\n", header)
+        (out,) = make_completion_rows([row(0, prog)], seed=0, fraction=0.99)
+        assert is_completion(out) and out["completion"].startswith(f"```cobol\n{header}")
