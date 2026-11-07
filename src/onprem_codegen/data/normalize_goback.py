@@ -13,6 +13,8 @@ import hashlib
 import json
 import os
 import re
+import threading
+import time
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from typing import Callable
@@ -101,11 +103,22 @@ def main(argv: list[str] | None = None) -> None:
     tasks = {t["task_id"]: t for t in read_jsonl(pool)}
     heldout = set(json.loads(Path(a.heldout).read_text())["task_ids"])
 
+    all_rows = read_jsonl(src)
+    total = sum(r["task_id"] not in heldout for r in all_rows)   # upper bound: rows without GOBACK are skipped
+    done, failed, lock, t0 = [0], [0], threading.Lock(), time.time()
+
     def passes(row: dict, program: str) -> bool:   # generated rows ran on every sample of the statement, human rows on its test
         tests = all_tests(tasks[row["task_id"]]) if row["source"] == "rejection_sampling" else tasks[row["task_id"]]["tests"]
-        return passes_ignoring_spacing(program, tests, timeout)
+        ok = passes_ignoring_spacing(program, tests, timeout)
+        with lock:
+            done[0] += 1
+            failed[0] += not ok
+            if done[0] % 20 == 0 or done[0] == total:
+                eta = (time.time() - t0) / done[0] * (total - done[0]) / 60
+                print(f"progress {done[0]}/{total} run, {failed[0]} failed, ~{eta:.0f} min left", flush=True)
+        return ok
 
-    rows, stats = build_v1_lite(read_jsonl(src), heldout, passes, a.workers)
+    rows, stats = build_v1_lite(all_rows, heldout, passes, a.workers)
     (out / "sft.jsonl").write_text("".join(json.dumps(r, ensure_ascii=False) + "\n" for r in rows))
     stats["goback_share"] = round(sum("GOBACK" in r["completion"] for r in rows) / max(len(rows), 1), 4)
     stats["tasks"] = len({r["task_id"] for r in rows})
