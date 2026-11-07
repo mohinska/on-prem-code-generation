@@ -78,3 +78,24 @@ def test_data_division_with_padded_spaces_or_lower_case_is_split_too():
         prog = PROG.replace("       DATA DIVISION.\n", header)
         (out,) = make_completion_rows([row(0, prog)], seed=0, fraction=0.99)
         assert is_completion(out) and out["completion"].startswith(f"```cobol\n{header}")
+
+
+def test_cli_writes_rows_and_stats_and_fails_on_benchmark_hit(tmp_path, monkeypatch):
+    import json
+    from onprem_codegen.data import completion_rows
+
+    src = tmp_path / "in.jsonl"
+    src.write_text("".join(json.dumps(row(i)) + "\n" for i in range(20)))
+    out = tmp_path / "out"
+    monkeypatch.setattr(completion_rows, "decontaminate", lambda path, report, cfg: 0)
+
+    assert completion_rows.main(["--input", str(src), "--out", str(out), "--seed", "7", "--no-wandb"]) == 0
+
+    rows = [json.loads(l) for l in (out / "sft.jsonl").read_text().splitlines()]
+    stats = json.loads((out / "stats.json").read_text())
+    assert len(rows) == 20 and stats["rows"] == 20 and stats["seed"] == 7
+    assert stats["completion_rows"] == sum(is_completion(r) for r in rows) == 10
+    assert stats["completion_share"] == 0.5 and stats["decontam_hits"] == 0
+
+    monkeypatch.setattr(completion_rows, "decontaminate", lambda path, report, cfg: 1)
+    assert completion_rows.main(["--input", str(src), "--out", str(out), "--seed", "7", "--no-wandb"]) == 1
