@@ -113,7 +113,6 @@ Smoke test without a custom image: start from `pytorch/pytorch:2.11.0-cuda12.8-c
 `--onstart scripts/vast_onstart.sh`.
 
 Serving a trained model is described in [Run the trained model](#run-the-trained-model).
-Unattended run on one instance (train sft-v0, serve it, generate the non-thinking eval; stops at the first failure): `bash scripts/overnight.sh 2>&1 | tee overnight.log` in tmux.
 
 ## Run the trained model
 

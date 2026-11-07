@@ -109,7 +109,7 @@ Tokens counted with the Qwen3.8 tokenizer on prompt + completion (chat template 
 - Manual review of 20 random rows (10 per source, seed 13): **go**. Thresholds are met (811 rows ≥ 500, 349 tasks ≥ 200). `sft-v0` settings: `sft.yaml` as is (lr 2e-4, r 16, alpha 32, batch 1 × accumulation 16, `max_length` 4096, `eval_fraction` 0.1) with `train.num_train_epochs=3`, `train.save_steps=44` (one checkpoint and eval per epoch), `train.logging_steps=5`.
 
 ### sft-v0 (SFT, 2.1)
-`--config-name sft run_name=sft-v0 train.num_train_epochs=3 train.save_steps=44 train.logging_steps=5` on `sft-dataset:decontaminated` (v0): QLoRA 4-bit, r 16, alpha 32, dropout 0.05, lr 2e-4 cosine, batch 1 × accumulation 16, `max_length` 4096, 712 train / 99 eval rows (split by task), 135 steps, 1× RTX PRO 6000 Blackwell (98 GB), commit `9c4da41`, started 2026-11-06 22:11 UTC and finished 23:02 UTC. [Run sft-v0](https://wandb.ai/mllab-team/onprem-codegen/runs/sft-v0), run through `scripts/overnight.sh`.
+`--config-name sft run_name=sft-v0 train.num_train_epochs=3 train.save_steps=44 train.logging_steps=5` on `sft-dataset:decontaminated` (v0): QLoRA 4-bit, r 16, alpha 32, dropout 0.05, lr 2e-4 cosine, batch 1 × accumulation 16, `max_length` 4096, 712 train / 99 eval rows (split by task), 135 steps, 1× RTX PRO 6000 Blackwell (98 GB), commit `9c4da41`, started 2026-11-06 22:11 UTC and finished 23:02 UTC. [Run sft-v0](https://wandb.ai/mllab-team/onprem-codegen/runs/sft-v0), run from a one-off queue script (in commit `9c4da41`).
 
 | Step | 44 | 88 | 132 | 135 (end) |
 |---|---|---|---|---|
@@ -218,6 +218,13 @@ vLLM 0.32.0 (own venv, torch 2.13.0, `--max-num-seqs 256`), model `Qwen3_5ForCon
 
 ### sft-v1 success criteria (plan 0.3)
 `docs/sft-v1-preregistration.md` committed as `9ca4658` before any sft-v1 training: criteria, verdict rules, held-out split (421 tasks, seed 7), training settings (as sft-v0, seed 42, second seed 43) and comparison protocol. It is not edited after this commit.
+
+### build_prompt keeps the first-line indent (plan 1.1)
+`build_prompt` no longer calls `.strip()`: it drops blank lines before the task text and trailing whitespace, and keeps the first line's indentation, so fixed-format COBOL prompts keep their 7 leading spaces. Checked on the stored task texts: all 2104 `task-pool:v1` prompts are byte-identical to the old output (so the 811 `sft-dataset:v0` prompts are too), all 146 COBOLEval and 46 CobolCodeBench completion prompts now start with 7 spaces, and CobolCodeBench instruct (46) and HumanEval-Python (164) are unchanged. Tests: `tests/test_prompt.py`. Baseline v2 on the affected groups is still to be measured (plan 1.4, 2.2).
+
+### sft-dataset:v1-lite (plan 1.2, 1.5)
+- 1.2, run [ea6c2jfb](https://wandb.ai/mllab-team/onprem-codegen/runs/ea6c2jfb), `sft-dataset:v1`: from `sft-dataset:v0` (811 rows) the 141 rows of held-out tasks were removed, `STOP RUN` was replaced by `GOBACK` in 662 programs, 8 programs with no terminator at all were dropped, and every remaining program was run again with its tests in the eval-sandbox (generated rows on all samples of the statement, human rows on the task's test): 0 failed. 662 rows on 283 tasks, 100% with `GOBACK`, 0 held-out tasks, 0 benchmark hits.
+- 1.5, `sft-dataset:v2` (aliases `v1-lite`, `decontaminated-v1`; `decontaminated` still points to v0): for half of the tasks (seed 7) the row is a completion row, prompt = task text + program up to `DATA DIVISION` + `IO_COMPLETE`, answer = the rest; prefix + answer is the checked program byte for byte. 326 of 662 rows (49.2%), 0 benchmark hits on the new prompts. The first version of the splitter missed `DATA   DIVISION.` with padded spaces and lower case (135 programs, share 39.6%); fixed before the artifact was built.
 
 ### still missing
 SFT results (A, C), thinking baseline on CobolCodeBench (not run, see above), CodeNet licence (C), reports.

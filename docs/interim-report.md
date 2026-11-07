@@ -383,7 +383,7 @@ SFT на 712 stdin-програмах не покращив жоден бенч�
 | Репетиція навчання | `sft-b1` (коміт `8e531fa`) |
 | Навчання | `sft-v0` (коміт `9c4da41`), адаптер `sft-v0-adapter:candidate`, чекпоінти `sft-v0-ckpt` |
 | Генерація і виконання sft-v0 | `o47hz4el`, `ke91f26o`; `eval-generations:sft-v0`, `eval-results:sft-v0` |
-| Код пайплайну | `src/onprem_codegen/{data,train,eval,serve}`, `scripts/overnight.sh`, конфіги в `configs/` |
+| Код пайплайну | `src/onprem_codegen/{data,train,eval,serve}`, `scripts/vast_serve.sh`, конфіги в `configs/` |
 | Документи | `docs/project-log.md` (усі числа), `docs/baseline.md`, `docs/sft-v0.md` |
 | GPU | A100 80 GB (baseline), H100/H200 NVL (rejection sampling), RTX PRO 6000 Blackwell 98 GB (навчання й генерація sft-v0) |
 | Тести | 145 passed, 4 skipped |

@@ -13,7 +13,7 @@ data:
 
 train:
   max_steps: -1
-  num_train_epochs: 2
+  num_train_epochs: 3          # sft-v0 ran 3: eval loss flat between epochs 2 and 3, no overfitting
   save_steps: 100
   logging_steps: 5
   gradient_accumulation_steps: 16
