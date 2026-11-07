@@ -62,6 +62,7 @@ def test_adapter_role_trains_two_seeds_then_serves_both_adapters_and_generates(t
     assert len(train) == 2
     for c, name, seed in zip(train, ("sft-v1", "sft-v1-seed2"), (42, 43)):
         assert f"run_name={name} " in c and f"seed={seed} " in c
+        assert "data.split_seed=42" in c          # same eval split for both seeds: only training noise differs
         assert "--config-name sft" in c and "data.artifact=sft-dataset:decontaminated-v1" in c
     assert any("sft-v1-adapter:candidate --root /adapters/cobol" in c for c in cmds)
     assert any("sft-v1-seed2-adapter:candidate --root /adapters/cobol-seed2" in c for c in cmds)

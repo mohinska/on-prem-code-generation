@@ -143,7 +143,7 @@ def main(cfg: DictConfig) -> None:
     ds = load_dataset("json", data_files=str(Path(data_dir) / "sft.jsonl"), split="train")
     # Split by task before rendering (rendering drops task_id), then drop over-length rows from both parts.
     task_ids = ds["task_id"] if "task_id" in ds.column_names else [None] * len(ds)
-    train_idx, eval_idx = split_indices(task_ids, cfg.data.eval_fraction, cfg.seed)
+    train_idx, eval_idx = split_indices(task_ids, cfg.data.eval_fraction, cfg.seed if cfg.data.get("split_seed") is None else cfg.data.split_seed)
     parts = [ds.select(idx) for idx in (train_idx, eval_idx)]
     parts = [p.map(lambda ex: to_prompt_completion(tok, ex), remove_columns=p.column_names) for p in parts]
     (ds, dropped_train), (eval_ds, dropped_eval) = (drop_overlength(p, tok, cfg.train.max_length) for p in parts)

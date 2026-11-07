@@ -43,7 +43,7 @@ up() { curl -sf "$URL/models" > /dev/null; }
 
 train() {   # run_name seed
   if [ "$DRY" != 1 ] && up; then echo "vLLM is running on :8000: stop it before training"; return 1; fi
-  x python -m onprem_codegen.train.sft --config-name sft run_name="$1" seed="$2" data.artifact=$DATA \
+  x python -m onprem_codegen.train.sft --config-name sft run_name="$1" seed="$2" data.split_seed=42 data.artifact=$DATA \
     train.save_steps=$SAVE_STEPS
 }
 step_train_sft_v1() { train sft-v1 42; }
