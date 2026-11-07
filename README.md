@@ -4,7 +4,7 @@ Domain-adapts an open code model to COBOL and serves it on our own hardware, wit
 Every dataset, run, sweep and eval is tracked in Weights & Biases. Project brief: [docs/one-pager.pdf](docs/one-pager.pdf).
 
 > **Status:** in progress. Data (collect, clean, CodeNet task pool, rejection sampling), SFT and the baseline eval exist.
-> Preference tuning, serving and the model registry are not written yet.
+> Preference tuning and the model registry are not written yet.
 
 ## Pipeline
 
@@ -58,7 +58,7 @@ Keep this section up to date whenever you add, move or remove a top-level direct
 ├── src/onprem_codegen/
 │   ├── prompt.py            # build_prompt, shared by SFT data and eval
 │   ├── utils.py
-│   ├── data/                # collect, filters, dedup, decontaminate, clean, CodeNet, rejection sampling
+│   ├── data/                # collect, filters, dedup, decontaminate, clean, CodeNet, rejection sampling, held-out task split
 │   ├── train/               # SFT (DPO, GRPO planned)
 │   ├── eval/                # sandboxed execute(), benchmark loader, generate -> execute -> metrics -> W&B
 │   └── serve/               # adapter export, demo client helpers (planned)
@@ -112,12 +112,46 @@ vastai destroy instance <INSTANCE_ID>
 Smoke test without a custom image: start from `pytorch/pytorch:2.11.0-cuda12.8-cudnn9-devel` with
 `--onstart scripts/vast_onstart.sh`.
 
-**Serving:** start from the `onprem-codegen-serve` image, fetch the adapter
-(`wandb artifact get <entity>/<project>/adapter:production --root /adapters/cobol`), run `serve-entrypoint.sh`,
-then tunnel with `ssh -p <PORT> root@<HOST> -N -L 8000:localhost:8000`. `localhost:8000/v1/models` lists `base` and `cobol`.
-On a plain PyTorch-template instance without Docker: `ADAPTER=<name:alias> bash scripts/vast_serve.sh` (own venv for vLLM, fetches the adapter, serves).
-`python -m onprem_codegen.serve.check` through the tunnel checks that both models answer and that the adapter changes the logprobs.
+Serving a trained model is described in [Run the trained model](#run-the-trained-model).
 Unattended run on one instance (train sft-v0, serve it, generate the non-thinking eval; stops at the first failure): `bash scripts/overnight.sh 2>&1 | tee overnight.log` in tmux.
+
+## Run the trained model
+
+The base model is not modified, so only the LoRA adapter is stored by us. vLLM serves both at once:
+`base` is the original model, `cobol` is base + adapter, and the `model` field of a request picks one.
+
+| Model | Where | Note |
+|---|---|---|
+| `Qwen/Qwen3.8-27B` | Hugging Face (`HF_TOKEN`) | unmodified base |
+| `sft-v0-adapter:candidate` | W&B artifact in `mllab-team/onprem-codegen` | first adapter, commit `9c4da41`; it did not beat the base under the frozen protocol ([docs/sft-v0.md](docs/sft-v0.md)) |
+
+The Model Registry step (`make register`, alias `production`) is not written yet, so `candidate` is the only alias.
+The adapter is not merged into the weights; merged FP8 / AWQ builds are planned.
+
+You need one 80 GB GPU, ≥ 200 GB disk, a W&B account with access to the team project, and `HF_TOKEN`.
+
+```bash
+git clone <repo-url> && cd on-prem-code-generation
+export WANDB_API_KEY=... WANDB_ENTITY=mllab-team WANDB_PROJECT=onprem-codegen HF_TOKEN=...
+ADAPTER=sft-v0-adapter:candidate bash scripts/vast_serve.sh     # in tmux; installs vLLM in its own venv, fetches the adapter, serves
+```
+
+Then, from your machine:
+
+```bash
+ssh -p <PORT> root@<HOST> -N -L 8000:localhost:8000             # no public port
+python -m onprem_codegen.serve.check                            # both models answer and the adapter changes the logprobs
+curl localhost:8000/v1/chat/completions -H 'Content-Type: application/json' \
+  -d '{"model": "cobol", "messages": [{"role": "user", "content": "Write a COBOL program that prints 42."}]}'
+```
+
+`localhost:8000/v1/models` lists `base` and `cobol`; set `"model": "base"` to compare.
+
+**Fetching the adapter by hand.** Run `PYTHONPATH=src python -m onprem_codegen.serve.adapter_keys <adapter dir>` before
+starting vLLM. The trainer saves keys as `model.layers…`, vLLM looks for `model.language_model.layers…`, and an adapter
+with the wrong keys loads without an error and changes nothing (`cobol` answers like `base`). `vast_serve.sh` does this step itself.
+
+On the Docker image: `docker/serve-entrypoint.sh` serves whatever adapter is in `/adapters/cobol`.
 
 ## Eval
 
