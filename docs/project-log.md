@@ -226,5 +226,23 @@ vLLM 0.32.0 (own venv, torch 2.13.0, `--max-num-seqs 256`), model `Qwen3_5ForCon
 - 1.2, run [ea6c2jfb](https://wandb.ai/mllab-team/onprem-codegen/runs/ea6c2jfb), `sft-dataset:v1`: from `sft-dataset:v0` (811 rows) the 141 rows of held-out tasks were removed, `STOP RUN` was replaced by `GOBACK` in 662 programs, 8 programs with no terminator at all were dropped, and every remaining program was run again with its tests in the eval-sandbox (generated rows on all samples of the statement, human rows on the task's test): 0 failed. 662 rows on 283 tasks, 100% with `GOBACK`, 0 held-out tasks, 0 benchmark hits.
 - 1.5, `sft-dataset:v2` (aliases `v1-lite`, `decontaminated-v1`; `decontaminated` still points to v0): for half of the tasks (seed 7) the row is a completion row, prompt = task text + program up to `DATA DIVISION` + `IO_COMPLETE`, answer = the rest; prefix + answer is the checked program byte for byte. 326 of 662 rows (49.2%), 0 benchmark hits on the new prompts. The first version of the splitter missed `DATA   DIVISION.` with padded spaces and lower case (135 programs, share 39.6%); fixed before the artifact was built.
 
+### baseline v2 generation (ROLE=base)
+`ROLE=base bash scripts/sft_v1_queue.sh` on Vast instance 59609324, 1× A100 SXM4 80 GB ($1.12/h, datacenter, image `pytorch/pytorch:2.11.0-cuda12.8-cudnn9-devel`), commit `c29fdf9`, vLLM 0.32.0 serving `base` only (`max_model_len` 32768), W&B owner `dovhai-pn`. Queue 2026-11-07 18:53 → 23:58 UTC; the instance was destroyed 2026-11-08 00:04 UTC after both artifacts were `COMMITTED` in W&B.
+
+| Step | Time (UTC) | Duration |
+|---|---|---|
+| benchmarks ([run 80khgzxr](https://wandb.ai/mllab-team/onprem-codegen/runs/80khgzxr)) | 18:53:03 → 18:53:09 | 6 s |
+| task-pool | 18:53:09 → 18:53:14 | 5 s |
+| vllm-env (second start, see below) | 18:53:59 → 18:55:02 | 1 min |
+| serve | 18:55:02 → 19:00:22 | 5 min 20 s |
+| check (`base ok`) | 19:00:22 → 19:00:24 | 2 s |
+| generate-baseline-v2 ([run whdrytj0](https://wandb.ai/mllab-team/onprem-codegen/runs/whdrytj0)) | 19:00:24 → 20:39:53 | 1 h 39 min |
+| heldout-base ([run 3qmyo85n](https://wandb.ai/mllab-team/onprem-codegen/runs/3qmyo85n)) | 20:39:53 → 23:58:11 | 3 h 18 min |
+
+- `eval-generations:baseline-v2` (v6): 768 requests, 0 failed, 4416 rows, all non-thinking: COBOLEval greedy 438 / sampled 2920, CobolCodeBench completion greedy 138 / sampled 920. `finish_reason` length 145 (3.3%): COBOLEval 4 / 15, CobolCodeBench completion 31 / 95. 0 rows contain `</think>`.
+- `eval-generations:heldout-base` (v9): 842 requests, 0 failed, 2526 rows on 421 held-out tasks (greedy 421, sampled 2105). `finish_reason` length 653 (25.9%): greedy 145, sampled 508. 0 rows contain `</think>`.
+- Instance setup on a fresh Vast instance: the Vast account environment variables override `--env` of `vastai create instance`, so the instance got the account `WANDB_API_KEY` (owner `irynkasv`). The own key was copied to `/root/.wandb_env` and sourced in the shell. The account has no `GITHUB_TOKEN`, so it was passed with `--env` (the repo is private). The variables are not visible in an SSH shell, only in `/proc/1/environ`, so they were exported from there before the queue started.
+- The first `vllm-env` start failed: `pip install uv` hit `externally-managed-environment` (PEP 668), because `vast_onstart.sh` sets `PIP_BREAK_SYSTEM_PACKAGES=1` only for itself. With `export PIP_BREAK_SYSTEM_PACKAGES=1` in the shell the same command skipped the done steps and continued.
+
 ### still missing
 SFT results (A, C), thinking baseline on CobolCodeBench (not run, see above), CodeNet licence (C), reports.
