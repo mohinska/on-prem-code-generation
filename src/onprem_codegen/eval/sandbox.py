@@ -25,6 +25,7 @@ from pathlib import Path
 RUNNER = Path(__file__).with_name("sandbox_runner.py")
 DEFAULT_IMAGE = "onprem-codegen/eval-sandbox"
 STARTUP_S = 30.0   # docker start-up allowance on top of the job's own timeouts
+OOM_KILLED = 137   # docker exit code when the container hits --memory and the kernel kills it
 
 
 class SandboxError(RuntimeError):
@@ -38,7 +39,8 @@ def run_job(job: dict, budget_s: float, backend: str | None = None) -> dict:
         (workdir / "job.json").write_text(json.dumps(job), encoding="utf-8")
         os.chmod(workdir, 0o777)   # the container user (uid 10001) must be able to write here
         if backend == "docker":
-            _run_docker(workdir, budget_s)
+            if _run_docker(workdir, budget_s) == OOM_KILLED:
+                return _oom_result(job, workdir)
         elif backend == "local":
             _run_local(workdir, budget_s)
         else:
@@ -49,6 +51,17 @@ def run_job(job: dict, budget_s: float, backend: str | None = None) -> dict:
         return json.loads(result.read_text(encoding="utf-8"))
     finally:
         shutil.rmtree(workdir, ignore_errors=True)
+
+
+def _oom_result(job: dict, workdir: Path) -> dict:
+    """The program used up the container's memory: a runtime error of the program, not a sandbox failure.
+    COBOL counts as compiled if cobc left the binary behind (the workdir is mounted from the host)."""
+    compiled = job["kind"] == "python" or any((workdir / b).is_file() for b in ("prog", "call_prog"))
+    msg = "killed: sandbox memory limit (exit 137)"
+    if not compiled:
+        return {"compiled": False, "compile_stderr": msg, "tests": []}
+    return {"compiled": True, "compile_stderr": "",
+            "tests": [{"status": "runtime_error", "stdout": "", "stderr": msg, "duration_s": 0.0}]}
 
 
 def _run_local(workdir: Path, budget_s: float) -> None:
@@ -73,7 +86,7 @@ def _docker_args(workdir: Path, name: str, image: str) -> list[str]:
     ]
 
 
-def _run_docker(workdir: Path, budget_s: float) -> None:
+def _run_docker(workdir: Path, budget_s: float) -> int | None:
     name = f"onprem-exec-{uuid.uuid4().hex[:12]}"
     image = os.environ.get("EVAL_SANDBOX_IMAGE", DEFAULT_IMAGE)
     try:
@@ -84,6 +97,8 @@ def _run_docker(workdir: Path, budget_s: float) -> None:
     except subprocess.TimeoutExpired as e:
         subprocess.run(["docker", "rm", "-f", name], capture_output=True)
         raise SandboxError(f"sandbox container exceeded its {budget_s:.0f}s budget") from e
+    if p.returncode == OOM_KILLED:
+        return OOM_KILLED
     if p.returncode != 0:
         raise SandboxError(f"docker run failed (is the image built? `docker build -f docker/eval-sandbox.Dockerfile "
                            f"-t {image} .`):\n{p.stderr[-2000:]}")

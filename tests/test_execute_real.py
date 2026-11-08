@@ -184,6 +184,22 @@ def test_missing_docker_is_a_sandbox_error_not_a_verdict(monkeypatch):
         execute("def double(x): return x", CHECK, lang="python")
 
 
+@pytest.mark.parametrize("binary,status", [("prog", Status.RUNTIME_ERROR), (None, Status.COMPILE_ERROR)])
+def test_container_killed_for_memory_is_a_program_failure(monkeypatch, binary, status):
+    # codenet/p03971: a program with 100 000-char records got the container OOM-killed (exit 137).
+    monkeypatch.setenv("EXECUTE_BACKEND", "docker")
+
+    def oom(args, **k):
+        if binary:
+            workdir = next(a for a in args if a.endswith(":/work:rw")).removesuffix(":/work:rw")
+            (sandbox.Path(workdir) / binary).touch()
+        return subprocess.CompletedProcess(args, 137, "", "")
+
+    monkeypatch.setattr(subprocess, "run", oom)
+    r = execute("       IDENTIFICATION DIVISION.\n", [STDIN], lang="cobol")
+    assert r.status == status and not r.passed and "memory limit" in r.compile_stderr + r.run_stderr
+
+
 # ---------- COBOL end to end (needs cobc) ----------
 
 needs_cobc = pytest.mark.skipif(COBOL_BACKEND is None,
