@@ -265,7 +265,35 @@ vLLM 0.32.0 (own venv, torch 2.13.0, `--max-num-seqs 256`), model `Qwen3_5ForCon
 
 - Whole queue: 15:06–01:52 UTC (≈ 10 h 45 min); generation took ≈ 9 h of it. Truncated (`finish_reason` length): 281 of 9246 rows (sft-v1), 91 of 2920 (seed 2). The instance was destroyed by hand after the queue (AUTODESTROY not used).
 - The W&B owner of the runs is `irynkasv` (W&B key from the Vast account environment variables).
-- Execution in the sandbox and the verdict: not done yet.
+- Execution in the sandbox and the verdict: see "sft-v1 verdict" below.
+
+### held-out base execution (sandbox)
+`heldout execute --models base` on `eval-generations:heldout-base` (v9), locally in `eval-sandbox` (Docker Desktop, Windows), pool `task-pool:v1`, 421 tasks, 2526 rows. No `</think>` in programs.
+
+| Decoding | Rows | ok | wrong_output | runtime_error | timeout | compile_error | no_program |
+|---|---|---|---|---|---|---|---|
+| greedy | 421 | 2 | 21 | 2 | 0 | 251 | 145 |
+| sampled (5 per task) | 2105 | 7 | 78 | 6 | 5 | 1505 | 504 |
+
+- A container killed for its memory limit (`docker run` exit 137) counts as the program's `runtime_error` (`compile_error` if cobc left no binary), not as a sandbox failure. Before, one program (`codenet/p03971` greedy, 100 000-char records) stopped the whole run at 2525 of 2526. Test: `test_container_killed_for_memory_is_a_program_failure`.
+
+### sft-v1 verdict (plan 3.2)
+Execution in `eval-sandbox` at commit `c63c99b`: [baseline-v2](https://wandb.ai/mllab-team/onprem-codegen/runs/7idjdqq0) (`eval-results:baseline-v2`, v7, 4416 rows), [sft-v1](https://wandb.ai/mllab-team/onprem-codegen/runs/9iif0lhu) (`eval-results:sft-v1`, v8, 9246 rows), [sft-v1-seed2](https://wandb.ai/mllab-team/onprem-codegen/runs/jeodg2bm) (`eval-results:sft-v1-seed2`, v9, 2920 rows); held-out locally (2526 rows per model, `report_cobol.json`, `report_cobol-seed2.json`). No `</think>` in any program. Verdict by `eval.verdict` (commit `c29fdf9`). Report: [sft-v1.md](sft-v1.md).
+
+**Вердикт: частковий, нестабільний** (seed 42 and seed 43 differ on the main criterion).
+
+| Criterion (seed 42) | Met | Numbers |
+|---|---|---|
+| Main: COBOLEval sampled pass@1, compile rate | no | 0.021 → 0.021, Δ +0.000 [−0.011, +0.011]; compile 0.086 → 0.059 |
+| Extra: COBOLEval pass@10, greedy pass@1 | no | pass@10 Δ +0.006 [−0.051, +0.068]; greedy Δ −0.034 |
+| Guard Python | no | HumanEval-Python sampled pass@1 0.969 → 0.919 (Δ −0.050) |
+| Guard CobolCodeBench completion | no | Δ pass@1 −0.009 [−0.018, −0.001]; truncation 0.103 → 0.126 |
+| Training works (held-out) | yes | sampled pass@1 0.003 → 0.068, Δ +0.065 [+0.048, +0.083] |
+| Seed 43: main | yes | 0.021 → 0.055, Δ +0.035 [+0.017, +0.053]; compile 0.086 → 0.137 |
+| Seed 43: training works | yes | 0.003 → 0.069, Δ +0.066 [+0.048, +0.085] |
+
+- Exploratory: seed 42 writes the first program line in column 1 in 383 of 429 greedy COBOLEval programs (`invalid indicator`, 380 compile errors); seed 43 mostly keeps the indent. Cause not investigated.
+- `sft-v1-adapter:candidate` is not promoted; README "Run the trained model" unchanged.
 
 ### still missing
 SFT results (A, C), thinking baseline on CobolCodeBench (not run, see above), CodeNet licence (C), reports.
