@@ -244,5 +244,28 @@ vLLM 0.32.0 (own venv, torch 2.13.0, `--max-num-seqs 256`), model `Qwen3_5ForCon
 - Instance setup on a fresh Vast instance: the Vast account environment variables override `--env` of `vastai create instance`, so the instance got the account `WANDB_API_KEY` (owner `irynkasv`). The own key was copied to `/root/.wandb_env` and sourced in the shell. The account has no `GITHUB_TOKEN`, so it was passed with `--env` (the repo is private). The variables are not visible in an SSH shell, only in `/proc/1/environ`, so they were exported from there before the queue started.
 - The first `vllm-env` start failed: `pip install uv` hit `externally-managed-environment` (PEP 668), because `vast_onstart.sh` sets `PIP_BREAK_SYSTEM_PACKAGES=1` only for itself. With `export PIP_BREAK_SYSTEM_PACKAGES=1` in the shell the same command skipped the done steps and continued.
 
+### sft-v1 (SFT, plan 2.1, 2.3) and its generations
+`ROLE=adapter bash scripts/sft_v1_queue.sh` on one Vast instance (1× RTX PRO 6000 Blackwell), commit `c29fdf9`. Both runs are `sft-v0` settings (QLoRA 4-bit, r 16, alpha 32, lr 2e-4, 3 epochs, 111 steps) on `sft-dataset:decontaminated-v1` (v2), 585 train / 77 eval rows with the same split for both seeds (`data.split_seed` 42).
+
+| Run | Seed | Wall time | Eval loss, step 37 / 74 / 111 | Eval token accuracy, step 111 | Train loss | Adapter |
+|---|---|---|---|---|---|---|
+| [sft-v1](https://wandb.ai/mllab-team/onprem-codegen/runs/sft-v1) | 42 | 44 min (15:06–15:50 UTC) | 0.1891 / 0.1618 / 0.1588 | 0.9521 | 0.2302 | `sft-v1-adapter:candidate` (v0) |
+| [sft-v1-seed2](https://wandb.ai/mllab-team/onprem-codegen/runs/sft-v1-seed2) | 43 | 32 min (15:51–16:23 UTC) | 0.1913 / 0.1619 / 0.1589 | 0.9518 | 0.2353 | `sft-v1-seed2-adapter:candidate` (v0) |
+
+- Eval loss still falls slightly at epoch 3 and does not rise; the last checkpoint is used. The two seeds differ by ≤ 0.002 in eval loss.
+- vLLM 0.32.0 served both adapters (`cobol`, `cobol-seed2`); `serve.check` passed, max logprob difference vs base 5.01 (`cobol`) and 5.35 (`cobol-seed2`).
+- Generations (`configs/eval/sft-v1.yaml`, `sft-v1-seed2.yaml`; held-out: 421 tasks × greedy + sampled = 842 requests per model, 0 failed):
+
+| Artifact `eval-generations:` | Version | Run | Size, time |
+|---|---|---|---|
+| `sft-v1` | v5 | [rw0tmnvp](https://wandb.ai/mllab-team/onprem-codegen/runs/rw0tmnvp) | 9246 rows, all groups; 2 h 42 min |
+| `heldout-sft-v1` | v7 | [18qxqhih](https://wandb.ai/mllab-team/onprem-codegen/runs/18qxqhih) | 842 requests; 2 h 47 min (19:15–22:02 UTC) |
+| `sft-v1-seed2` | v8 | [eo027095](https://wandb.ai/mllab-team/onprem-codegen/runs/eo027095) | 2920 rows, COBOLEval sampled only (by design); 35 min |
+| `heldout-sft-v1-seed2` | v10 | [up5xqy99](https://wandb.ai/mllab-team/onprem-codegen/runs/up5xqy99) | 842 requests; ≈ 3 h 15 min (to 01:52 UTC) |
+
+- Whole queue: 15:06–01:52 UTC (≈ 10 h 45 min); generation took ≈ 9 h of it. Truncated (`finish_reason` length): 281 of 9246 rows (sft-v1), 91 of 2920 (seed 2). The instance was destroyed by hand after the queue (AUTODESTROY not used).
+- The W&B owner of the runs is `irynkasv` (W&B key from the Vast account environment variables).
+- Execution in the sandbox and the verdict: not done yet.
+
 ### still missing
 SFT results (A, C), thinking baseline on CobolCodeBench (not run, see above), CodeNet licence (C), reports.
