@@ -13,9 +13,6 @@
 #   cd /workspace/on-prem-code-generation && ROLE=adapter AUTODESTROY=1 bash scripts/sft_v1_queue.sh
 # RUN=sft-v2 DATASET=decontaminated-v2: the same adapter queue for another run name and dataset alias
 # (configs/eval/$RUN.yaml and $RUN-seed2.yaml must exist).
-# STEPS="..." runs only the named steps. Seed 43 on every benchmark after an earlier COBOLEval-only run (sft-v1):
-#   ROLE=adapter STEPS="benchmarks task-pool vllm-env adapters serve check fetch-seed2 generate-sft-v1-seed2" bash ...
-# fetch-seed2 puts the existing seed-43 generations where eval.run looks, so only the missing requests are made.
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
@@ -132,7 +129,6 @@ step_heldout_base() { heldout base heldout-base; }
 step_generate_sft_v1() { evalgen "$RUN"; }
 step_heldout_sft_v1() { heldout cobol "heldout-$RUN"; }
 step_generate_sft_v1_seed2() { evalgen "$RUN-seed2"; }
-step_fetch_seed2() { x wandb artifact get "$P/eval-generations:$RUN-seed2" --root "outputs/eval/$RUN-seed2"; }
 step_heldout_sft_v1_seed2() { heldout cobol-seed2 "heldout-$RUN-seed2"; }
 
 verify_wandb() {
@@ -170,9 +166,7 @@ step_destroy() {
 
 # ---------- queue ----------
 
-if [ -n "${STEPS:-}" ]; then
-  read -r -a STEPS <<< "$STEPS"
-elif [ "$ROLE" = base ]; then
+if [ "$ROLE" = base ]; then
   STEPS=(benchmarks task-pool vllm-env serve check generate-baseline-v2 heldout-base)
 else
   STEPS=(train-sft-v1 train-sft-v1-seed2 benchmarks task-pool vllm-env adapters serve check

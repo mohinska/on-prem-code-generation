@@ -1,5 +1,5 @@
-# Second training seed (43) of sft-v2: the sft-v2-seed2 LoRA, served as `cobol-seed2`. Same benchmarks and protocol as
-# sft-v2.yaml, so both seeds are compared on everything (tests/test_eval_configs.py checks it).
+# Second training seed (sft-v2: fixed-format data): the sft-v2-seed2 LoRA, served as `cobol-seed2`, non-thinking, COBOLEval sampled only
+# (spread between seeds on the main criterion). Same protocol as the frozen baseline (tests/test_eval_configs.py).
 #   python -m onprem_codegen.eval.run --config configs/eval/sft-v2-seed2.yaml --stage generate        # on the instance
 #   python -m onprem_codegen.eval.run --config configs/eval/sft-v2-seed2.yaml --stage execute \
 #       --generations eval-generations:sft-v2-seed2                                                   # locally, sandbox
@@ -15,10 +15,8 @@ server:
 
 benchmarks:
   coboleval: [completion]
-  cobolcodebench: [completion, instruct]
-  humaneval_python: [completion]
 modes: [non_thinking]
-decodings: [greedy, sampled]
+decodings: [sampled]
 seed: 1234
 
 execute:

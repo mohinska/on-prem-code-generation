@@ -46,8 +46,9 @@ def test_baseline_v2_is_base_non_thinking_on_prompt_affected_groups_only():
 
 
 @pytest.mark.parametrize("run", ["sft-v1", "sft-v2"])
-def test_seed2_runs_the_same_benchmarks_as_seed_42_on_its_own_served_model(run):
-    seed42, new = _load(f"{run}.yaml"), _load(f"{run}-seed2.yaml")
+def test_seed2_is_coboleval_sampled_only_on_its_own_served_model(run):
+    base, new = _load("baseline.yaml"), _load(f"{run}-seed2.yaml")
     assert new["adapter"] == f"{run}-seed2-adapter:candidate" and new["run_name"] == f"{run}-seed2"
-    assert new["server"]["model"] == "cobol-seed2" and new["modes"] == seed42["modes"]
-    assert _strip(new) == _strip(seed42)
+    assert new["server"]["model"] == "cobol-seed2" and new["modes"] == ["non_thinking"]
+    assert new["benchmarks"] == {"coboleval": ["completion"]} and new["decodings"] == ["sampled"]
+    assert _strip(new, "benchmarks", "decodings") == _strip(base, "benchmarks", "decodings")
