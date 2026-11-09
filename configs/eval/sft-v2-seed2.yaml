@@ -1,0 +1,26 @@
+# Second training seed (sft-v2: fixed-format data): the sft-v2-seed2 LoRA, served as `cobol-seed2`, non-thinking, COBOLEval sampled only
+# (spread between seeds on the main criterion). Same protocol as the frozen baseline (tests/test_eval_configs.py).
+#   python -m onprem_codegen.eval.run --config configs/eval/sft-v2-seed2.yaml --stage generate        # on the instance
+#   python -m onprem_codegen.eval.run --config configs/eval/sft-v2-seed2.yaml --stage execute \
+#       --generations eval-generations:sft-v2-seed2                                                   # locally, sandbox
+run_name: sft-v2-seed2
+model_name: Qwen/Qwen3.8-27B
+adapter: sft-v2-seed2-adapter:candidate
+
+server:
+  base_url: http://localhost:8000/v1
+  model: cobol-seed2
+  request_timeout_s: 14400
+  concurrency: 8
+
+benchmarks:
+  coboleval: [completion]
+modes: [non_thinking]
+decodings: [sampled]
+seed: 1234
+
+execute:
+  timeout_s: 10.0
+  workers: 4
+ks: [1, 10]
+out_dir: outputs/eval

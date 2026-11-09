@@ -58,7 +58,7 @@ def test_build_v1_lite_drops_heldout_rewrites_and_rechecks():
     assert out[0]["prompt"] == "prompt t/1" and out[0]["source"] == "codenet_cobol"
     assert all("STOP RUN" not in p for _, p in seen)                    # the check runs on the new program
     assert [t for t, _ in seen] == ["t/1", "t/3", "t/4"]                # held-out rows are never executed
-    assert stats == {"input": 4, "heldout": 1, "stop_run_replaced": 2, "no_goback": 0,
+    assert stats == {"input": 4, "heldout": 1, "to_fixed": 0, "stop_run_replaced": 2, "no_goback": 0,
                      "failed_recheck": 1, "kept": 2}
 
 
@@ -66,3 +66,12 @@ def test_program_that_never_ends_explicitly_is_dropped_without_running():
     ran = []
     out, stats = build_v1_lite([row("t/1", "           DISPLAY 'X'.")], heldout=set(), passes=lambda r, p: ran.append(p) or True)
     assert out == [] and ran == [] and stats["no_goback"] == 1 and stats["kept"] == 0
+
+
+def test_free_format_program_is_moved_to_fixed_format_and_rechecked():
+    seen = []
+    out, stats = build_v1_lite([row("t/1", "PROCEDURE DIVISION.\n    STOP RUN.")], heldout=set(),
+                               passes=lambda r, p: seen.append(p) or True)
+    assert seen == ["       PROCEDURE DIVISION.\n           GOBACK.\n"]      # the tests run on the fixed version
+    assert out[0]["completion"] == "```cobol\n       PROCEDURE DIVISION.\n           GOBACK.\n```"
+    assert stats["to_fixed"] == 1

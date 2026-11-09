@@ -33,8 +33,8 @@ def test_round_trip_indent_and_gobacks():
         assert "DATA DIVISION" not in prefix
         body = r["completion"]
         answer = body.removeprefix("```cobol\n").removesuffix("```")
-        assert answer.startswith("       DATA DIVISION.\n")
-        assert prefix + "\n" + answer == PROG  # prefix + answer is the original byte for byte
+        assert answer == PROG                  # the whole program: benchmarks compile the answer alone
+        assert PROG.startswith(prefix + "\n")  # the prompt shows its start, unchanged
         assert "GOBACK" in answer
         assert r["content_sha256"] == hashlib.sha256(body.encode()).hexdigest()
         assert r["prompt"].startswith("Print a digit. ")  # task text recovered from the stored prompt
@@ -70,14 +70,16 @@ def test_blank_lines_before_data_division_go_to_the_answer_so_the_round_trip_sta
     out = make_completion_rows([row(i, prog) for i in range(10)], seed=7)
     for r in (r for r in out if is_completion(r)):
         prefix = r["prompt"].split("\n\n", 1)[1].rsplit("\n\n", 1)[0] + "\n"
-        assert prefix + r["completion"].removeprefix("```cobol\n").removesuffix("```") == prog
+        answer = r["completion"].removeprefix("```cobol\n").removesuffix("```")
+        assert answer == prog and prog.startswith(prefix)
 
 
 def test_data_division_with_padded_spaces_or_lower_case_is_split_too():
     for header in ("       DATA                             DIVISION.\n", "       data division.\n"):
         prog = PROG.replace("       DATA DIVISION.\n", header)
         (out,) = make_completion_rows([row(0, prog)], seed=0, fraction=0.99)
-        assert is_completion(out) and out["completion"].startswith(f"```cobol\n{header}")
+        assert is_completion(out) and header.strip() not in out["prompt"]   # the prompt stops before DATA DIVISION
+        assert out["completion"] == f"```cobol\n{prog}```"
 
 
 def test_cli_writes_rows_and_stats_and_fails_on_benchmark_hit(tmp_path, monkeypatch):

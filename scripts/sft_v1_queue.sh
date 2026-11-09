@@ -11,6 +11,8 @@
 #
 #   tmux new -s q
 #   cd /workspace/on-prem-code-generation && ROLE=adapter AUTODESTROY=1 bash scripts/sft_v1_queue.sh
+# RUN=sft-v2 DATASET=decontaminated-v2: the same adapter queue for another run name and dataset alias
+# (configs/eval/$RUN.yaml and $RUN-seed2.yaml must exist).
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
@@ -26,14 +28,15 @@ if [ "$AUTO" = 1 ]; then
 fi
 
 export HF_HOME=${HF_HOME:-/workspace/hf-cache} PYTHONPATH=$PWD/src
-Q=${QUEUE_DIR:-$PWD/outputs/sft-v1-queue}/$ROLE
+RUN=${RUN:-sft-v1}
+Q=${QUEUE_DIR:-$PWD/outputs/$RUN-queue}/$ROLE
 VENV=/workspace/vllm-env
 URL=http://localhost:8000/v1
 P=$WANDB_ENTITY/$WANDB_PROJECT
-DATA=sft-dataset:decontaminated-v1
+DATA=sft-dataset:${DATASET:-decontaminated-v1}
 # ~662 rows, 10% of tasks held out for eval -> ~596 train rows / (1 x 16) = ~37 steps per epoch: checkpoint + eval
 # loss once per epoch (3 epochs ~ 112 steps).
-SAVE_STEPS=37
+SAVE_STEPS=${SAVE_STEPS:-37}
 
 say() { echo "progress $(date -u +%H:%M:%S) $*"; }
 x() { if [ "$DRY" = 1 ]; then echo "+ $*"; else "$@"; fi; }   # every command of a step goes through x
@@ -46,8 +49,8 @@ train() {   # run_name seed
   x python -m onprem_codegen.train.sft --config-name sft run_name="$1" seed="$2" data.split_seed=42 data.artifact=$DATA \
     train.save_steps=$SAVE_STEPS
 }
-step_train_sft_v1() { train sft-v1 42; }
-step_train_sft_v1_seed2() { train sft-v1-seed2 43; }
+step_train_sft_v1() { train "$RUN" 42; }
+step_train_sft_v1_seed2() { train "$RUN-seed2" 43; }
 
 step_benchmarks() { x python -m onprem_codegen.eval.benchmarks --wandb; }
 step_task_pool() { x wandb artifact get "$P/task-pool:v1" --root artifacts/task-pool:v1; }   # what eval.heldout reads
@@ -60,7 +63,7 @@ step_vllm_env() {
 }
 
 step_adapters() {
-  for pair in cobol=sft-v1 cobol-seed2=sft-v1-seed2; do
+  for pair in "cobol=$RUN" "cobol-seed2=$RUN-seed2"; do
     x rm -rf "/adapters/${pair%%=*}"
     x wandb artifact get "$P/${pair#*=}-adapter:candidate" --root "/adapters/${pair%%=*}"
     # Text-only adapter keys lack `language_model`: without this vLLM loads it but applies nothing (cobol == base).
@@ -123,10 +126,10 @@ heldout() {   # served model, W&B alias
 }
 step_generate_baseline_v2() { evalgen baseline-v2; }
 step_heldout_base() { heldout base heldout-base; }
-step_generate_sft_v1() { evalgen sft-v1; }
-step_heldout_sft_v1() { heldout cobol heldout-sft-v1; }
-step_generate_sft_v1_seed2() { evalgen sft-v1-seed2; }
-step_heldout_sft_v1_seed2() { heldout cobol-seed2 heldout-sft-v1-seed2; }
+step_generate_sft_v1() { evalgen "$RUN"; }
+step_heldout_sft_v1() { heldout cobol "heldout-$RUN"; }
+step_generate_sft_v1_seed2() { evalgen "$RUN-seed2"; }
+step_heldout_sft_v1_seed2() { heldout cobol-seed2 "heldout-$RUN-seed2"; }
 
 verify_wandb() {
   python - "$@" <<'PY'
@@ -140,8 +143,8 @@ PY
 if [ "$ROLE" = base ]; then
   EXPECTED=(eval-generations:baseline-v2 eval-generations:heldout-base)
 else
-  EXPECTED=(sft-v1-adapter:candidate sft-v1-seed2-adapter:candidate eval-generations:sft-v1
-            eval-generations:sft-v1-seed2 eval-generations:heldout-sft-v1 eval-generations:heldout-sft-v1-seed2)
+  EXPECTED=("$RUN-adapter:candidate" "$RUN-seed2-adapter:candidate" "eval-generations:$RUN"
+            "eval-generations:$RUN-seed2" "eval-generations:heldout-$RUN" "eval-generations:heldout-$RUN-seed2")
 fi
 step_verify_wandb() { x verify_wandb "${EXPECTED[@]}"; }
 # `vastai destroy instance` asks "[y/N]": without -y it waits on stdin in tmux, or reads EOF, prints "Aborted." and
@@ -178,7 +181,7 @@ if [ "$DRY" != 1 ]; then
   used=$(nvidia-smi --query-gpu=memory.used --format=csv,noheader,nounits | head -1)
   if [ "$used" -gt 2000 ] && ! up; then echo "GPU has ${used} MiB in use by something that is not our server"; exit 1; fi
 fi
-echo "sft-v1 queue, ROLE=$ROLE, steps: ${STEPS[*]}"
+echo "$RUN queue, ROLE=$ROLE, data $DATA, steps: ${STEPS[*]}"
 echo "watch:  tail -f $Q/queue.log"
 echo "        grep -h progress $Q/queue.log $Q/logs/*.log | tail"
 echo "        tail -f $Q/logs/<step>.log          # current step's output (training, N/M requests)"

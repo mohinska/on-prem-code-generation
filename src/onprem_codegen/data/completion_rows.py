@@ -1,10 +1,12 @@
 """sft-dataset rows -> about half of the tasks as completion rows (task 1.5), the rest stay full programs.
 
-A completion row: prompt = task text + program up to DATA DIVISION. + IO_COMPLETE, completion = rest of the program.
+A completion row: prompt = task text + program up to DATA DIVISION. + IO_COMPLETE, completion = the whole program.
+The benchmarks (COBOLEval, CobolCodeBench completion) compile the answer alone, so an answer with only the remaining
+lines has no PROGRAM-ID: sft-v1 learned that ("PROGRAM-ID header missing").
 
     python -m onprem_codegen.data.completion_rows [--dataset sft-dataset:v1-lite | --input sft.jsonl] [--seed 7] [--no-wandb]
 
-Programs are not changed (prefix + answer = the checked program), so no new execution is needed. The prompts are new,
+Programs are not changed (the answer is the checked program), so no new execution is needed. The prompts are new,
 so the benchmark check runs again; with no hit the W&B artifact gets the aliases v1-lite and decontaminated-v1.
 """
 import argparse
@@ -54,8 +56,8 @@ def make_completion_rows(rows: list[dict], seed: int, fraction: float = 0.5) -> 
         if parts is None:
             out.append(r)
             continue
-        prefix, rest = parts
-        completion = f"```cobol\n{rest}```"
+        prefix, _ = parts
+        completion = r["completion"]   # the whole checked program
         out.append({**r, "prompt": build_prompt(f"{_task_text(r['prompt'])}\n\n{prefix}", IO_COMPLETE),
                     "completion": completion, "content_sha256": hashlib.sha256(completion.encode()).hexdigest(),
                     "meta": {**(r.get("meta") or {}), "format": "completion"}})
@@ -68,6 +70,7 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--input", help="local sft.jsonl instead of the W&B artifact")
     ap.add_argument("--seed", type=int, default=7)
     ap.add_argument("--out", default=str(OUT))
+    ap.add_argument("--tag", default="v1", help="alias suffix: <tag>-lite-completion, <tag>-lite, decontaminated-<tag>")
     ap.add_argument("--no-wandb", action="store_true")
     a = ap.parse_args(argv)
     out = Path(a.out)
@@ -76,7 +79,7 @@ def main(argv: list[str] | None = None) -> int:
     run = None
     if not a.no_wandb:
         from onprem_codegen.utils import init_run
-        run = init_run("sft-v1-lite-completion", {"dataset": a.dataset, "seed": a.seed})
+        run = init_run(f"sft-{a.tag}-lite-completion", {"dataset": a.dataset, "seed": a.seed})
     src = Path(a.input) if a.input else Path(run.use_artifact(a.dataset).download()) / "sft.jsonl"
     rows = make_completion_rows(read_jsonl(src), a.seed)
     (out / "sft.jsonl").write_text("".join(json.dumps(r, ensure_ascii=False) + "\n" for r in rows))
@@ -92,7 +95,8 @@ def main(argv: list[str] | None = None) -> int:
         art = wandb.Artifact("sft-dataset", type="dataset", metadata={**stats, "git_commit": git_commit()})
         for f in ("sft.jsonl", "stats.json", "decontam_report.json"):
             art.add_file(str(out / f))
-        run.log_artifact(art, aliases=["v1-lite-completion"] + (["v1-lite", "decontaminated-v1"] if rc == 0 else []))
+        run.log_artifact(art, aliases=[f"{a.tag}-lite-completion"]
+                         + ([f"{a.tag}-lite", f"decontaminated-{a.tag}"] if rc == 0 else []))
         run.finish()
     return rc
 

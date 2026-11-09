@@ -19,6 +19,7 @@ from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from typing import Callable
 
+from onprem_codegen.data.fixed_format import is_free, to_fixed
 from onprem_codegen.eval.execute import extract_program
 from onprem_codegen.utils import git_commit, read_jsonl
 
@@ -53,14 +54,18 @@ def stop_run_to_goback(program: str) -> tuple[str, int]:
 
 def build_v1_lite(rows: list[dict], heldout: set[str], passes: Callable[[dict, str], bool],
                   workers: int = 1) -> tuple[list[dict], dict]:
-    """Held-out tasks out, STOP RUN -> GOBACK (programs without any GOBACK are dropped), then `passes(row, program)` must hold."""
-    stats = {"input": len(rows), "heldout": 0, "stop_run_replaced": 0, "no_goback": 0, "failed_recheck": 0, "kept": 0}
+    """Held-out tasks out, free format -> fixed, STOP RUN -> GOBACK (programs without any GOBACK are dropped),
+    then `passes(row, program)` must hold."""
+    stats = {"input": len(rows), "heldout": 0, "to_fixed": 0, "stop_run_replaced": 0, "no_goback": 0,
+             "failed_recheck": 0, "kept": 0}
     todo = []
     for r in rows:
         if r["task_id"] in heldout:
             stats["heldout"] += 1
             continue
-        program, n = stop_run_to_goback(extract_program(r["completion"]))
+        program = extract_program(r["completion"])
+        stats["to_fixed"] += is_free(program)
+        program, n = stop_run_to_goback(to_fixed(program))
         stats["stop_run_replaced"] += n > 0
         if not GOBACK.search(program):             # no terminator at all: not the ending we want to teach
             stats["no_goback"] += 1
@@ -87,6 +92,7 @@ def main(argv: list[str] | None = None) -> None:
     ap.add_argument("--heldout", default=str(HELDOUT))
     ap.add_argument("--out", default=str(OUT))
     ap.add_argument("--workers", type=int, default=4)
+    ap.add_argument("--tag", default="v1", help="alias suffix: <tag>-lite, decontaminated-<tag>")
     ap.add_argument("--no-wandb", action="store_true")
     a = ap.parse_args(argv)
     out = Path(a.out)
@@ -97,7 +103,7 @@ def main(argv: list[str] | None = None) -> None:
     run = None
     if not a.no_wandb:
         from onprem_codegen.utils import init_run
-        run = init_run("sft-v1-lite", {"dataset": a.dataset, "heldout": a.heldout, "workers": a.workers})
+        run = init_run(f"sft-{a.tag}-lite", {"dataset": a.dataset, "heldout": a.heldout, "workers": a.workers})
     src = Path(a.input) if a.input else Path(run.use_artifact(a.dataset).download()) / "sft.jsonl"
     pool = Path(a.task_pool) if a.task_pool else Path(run.use_artifact(rs_cfg["task_pool"]).download()) / "task_pool.jsonl"
     tasks = {t["task_id"]: t for t in read_jsonl(pool)}
@@ -133,7 +139,7 @@ def main(argv: list[str] | None = None) -> None:
         art = wandb.Artifact("sft-dataset", type="dataset", metadata={**stats, "git_commit": git_commit(), "decontam_hits": rc})
         art.add_file(str(out / "sft.jsonl"))
         art.add_file(str(out / "stats.json"))
-        run.log_artifact(art, aliases=["v1-lite"] + (["decontaminated-v1"] if rc == 0 else []))
+        run.log_artifact(art, aliases=[f"{a.tag}-lite"] + ([f"decontaminated-{a.tag}"] if rc == 0 else []))
         run.finish()
 
 

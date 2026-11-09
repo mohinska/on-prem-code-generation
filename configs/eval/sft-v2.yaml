@@ -1,0 +1,28 @@
+# Adapted run: the sft-v2 LoRA, served as `cobol` next to `base`, non-thinking, same protocol as the frozen baseline.
+# Differs from baseline.yaml only in run_name, adapter, server.model and modes (tests/test_eval_configs.py checks it).
+#   python -m onprem_codegen.eval.run --config configs/eval/sft-v2.yaml --stage generate        # on the instance
+#   python -m onprem_codegen.eval.run --config configs/eval/sft-v2.yaml --stage execute \
+#       --generations eval-generations:sft-v2                                                   # locally, sandbox
+run_name: sft-v2
+model_name: Qwen/Qwen3.8-27B
+adapter: sft-v2-adapter:candidate
+
+server:
+  base_url: http://localhost:8000/v1
+  model: cobol
+  request_timeout_s: 14400
+  concurrency: 8
+
+benchmarks:
+  coboleval: [completion]
+  cobolcodebench: [completion, instruct]
+  humaneval_python: [completion]
+modes: [non_thinking]
+decodings: [greedy, sampled]
+seed: 1234
+
+execute:
+  timeout_s: 10.0
+  workers: 4
+ks: [1, 10]
+out_dir: outputs/eval

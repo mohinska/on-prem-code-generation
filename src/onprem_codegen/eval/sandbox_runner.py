@@ -20,13 +20,16 @@ import ast
 import json
 import math
 import os
+import resource
 import signal
 import subprocess
 import sys
+import tempfile
 import time
 from pathlib import Path
 
 MAX_CAPTURE = 10_000   # chars of stdout/stderr kept per process
+MAX_OUTPUT_BYTES = 64 * 2**20   # per-file write cap of a process (RLIMIT_FSIZE): runaway output, cobc files
 
 # One flag set per protocol, taken from the reference harnesses (see data/manifests/benchmarks.yaml).
 CALLER_FLAGS = ["-w", "-fformat=variable", "-x"]   # COBOLEval scripts/evaluation.py
@@ -48,24 +51,28 @@ def run(cmd: list[str], cwd: Path, timeout: float, stdin: str = "") -> dict:
     t0 = time.monotonic()
     # Minimal environment: generated code gets no tokens or other secrets.
     env = {"PATH": os.environ.get("PATH", ""), "LANG": "C.UTF-8", "HOME": str(cwd)}
-    try:
-        proc = subprocess.Popen(
-            cmd, cwd=cwd, env=env, text=True, errors="replace",
-            stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
-            start_new_session=True,
-        )
-    except OSError as e:   # e.g. cobc is not installed
-        return {"returncode": 127, "timed_out": False, "stdout": "", "stderr": f"{e}", "duration_s": 0.0}
-    timed_out = False
-    try:
-        out, err = proc.communicate(stdin, timeout=timeout)
-    except subprocess.TimeoutExpired:
-        timed_out = True
+    # stdout/stderr go to files capped by RLIMIT_FSIZE: a program printing forever is killed (SIGXFSZ) at the cap
+    # instead of filling the runner's memory and OOM-killing the container.
+    cap = lambda: resource.setrlimit(resource.RLIMIT_FSIZE, (MAX_OUTPUT_BYTES, MAX_OUTPUT_BYTES))
+    with tempfile.TemporaryFile() as fo, tempfile.TemporaryFile() as fe:
         try:
-            os.killpg(proc.pid, signal.SIGKILL)
-        except OSError:
-            pass
-        out, err = proc.communicate()
+            proc = subprocess.Popen(cmd, cwd=cwd, env=env, stdin=subprocess.PIPE, stdout=fo, stderr=fe,
+                                    start_new_session=True, preexec_fn=cap)
+        except OSError as e:   # e.g. cobc is not installed
+            return {"returncode": 127, "timed_out": False, "stdout": "", "stderr": f"{e}", "duration_s": 0.0}
+        timed_out = False
+        try:
+            proc.communicate(stdin.encode(), timeout=timeout)
+        except subprocess.TimeoutExpired:
+            timed_out = True
+            try:
+                os.killpg(proc.pid, signal.SIGKILL)
+            except OSError:
+                pass
+            proc.wait()
+        fo.seek(0)
+        fe.seek(0)
+        out, err = fo.read(4 * MAX_CAPTURE), fe.read(4 * MAX_CAPTURE)
     return {"returncode": proc.returncode, "timed_out": timed_out,
             "stdout": _clip(out), "stderr": _clip(err), "duration_s": time.monotonic() - t0}
 

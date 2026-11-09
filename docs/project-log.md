@@ -292,8 +292,29 @@ Execution in `eval-sandbox` at commit `c63c99b`: [baseline-v2](https://wandb.ai/
 | Seed 43: main | yes | 0.021 → 0.055, Δ +0.035 [+0.017, +0.053]; compile 0.086 → 0.137 |
 | Seed 43: training works | yes | 0.003 → 0.069, Δ +0.066 [+0.048, +0.085] |
 
-- Exploratory: seed 42 writes the first program line in column 1 in 383 of 429 greedy COBOLEval programs (`invalid indicator`, 380 compile errors); seed 43 mostly keeps the indent. Cause not investigated.
+- Exploratory: seed 42 writes the first program line in column 1 in 383 of 429 greedy COBOLEval programs (`invalid indicator`, 380 compile errors); seed 43 mostly keeps the indent. Cause: next entry.
 - `sft-v1-adapter:candidate` is not promoted; README "Run the trained model" unchanged.
 
+### sft-v1 COBOLEval failures: two format defects of the training data
+- On the training distribution both seeds agree (Δ sampled pass@1 +0.065 and +0.066). On COBOLEval they do not, and almost all COBOLEval failures are compile errors from two format defects of the training data, in different proportions per seed:
+
+| COBOLEval compile errors | seed 42 greedy (438) | seed 42 sampled (2920) | seed 43 sampled (2920) |
+|---|---|---|---|
+| all | 428 | 2722 | 2427 |
+| `invalid indicator 'F' at column 7` (first line from column 1, rest indented) | 383 | 2225 | 327 |
+| `PROGRAM-ID header missing` (answer starts at `WORKING-STORAGE` / `DATA DIVISION`) | 40 | 383 | 1945 |
+
+- Column 7: 343 of the 670 rechecked programs were free format (human CodeNet solutions, code from column 1). The sandbox compiles stdin tasks with `cobc -x`, which detects free format, so they passed their tests; COBOLEval compiles with `-fformat=variable`, where column 7 is the indicator. No training program has "first line from column 1, rest indented": the model mixes the two styles.
+- PROGRAM-ID: the completion rows (plan 1.5) answered with the remaining lines only, but COBOLEval and CobolCodeBench compile the answer alone, without the prompt.
+- `codenet/p03971` (held-out base, the OOM above) prints 2.2 GB in 10 s: the runner kept stdout in memory. Besides the exit-137 rule, the runner now writes stdout/stderr to files capped at 64 MB (`RLIMIT_FSIZE`), so such a program is stopped at the cap (`runtime_error`) before the container runs out of memory; the comparison still uses the first 10 000 characters, so earlier results do not change.
+
+### sft-dataset v2 (fixed format, whole-program completion rows)
+Both defects fixed in the data, nothing in the eval protocol changed.
+- `normalize_goback` now moves free-format programs to fixed format (`data/fixed_format.py`: every non-blank line indented by 7 spaces; fixed programs, including ones with sequence numbers, unchanged) before `STOP RUN` → `GOBACK`, and every program is run again with its tests. From `sft-dataset:v0` (811 rows): 141 held-out rows out, 343 programs moved to fixed format, 8 without `GOBACK` dropped, 21 failed the recheck (a shifted line can pass column 72), 641 rows on 276 tasks kept → `sft-dataset:v3`, [run 3e73j4pe](https://wandb.ai/mllab-team/onprem-codegen/runs/3e73j4pe) (`--tag v2`).
+- Completion rows answer with the whole program (prompt still shows the program up to `DATA DIVISION`; `IO_COMPLETE` now asks for the whole program). 327 of 641 rows (51.0%), seed 7, 0 benchmark hits → `sft-dataset:v5` (aliases `decontaminated-v2`, `v2-lite`, `v2-lite-completion`), [run e1jm89qs](https://wandb.ai/mllab-team/onprem-codegen/runs/e1jm89qs). `v4` ([run 3e7d9to2](https://wandb.ai/mllab-team/onprem-codegen/runs/3e7d9to2)) is the build with remaining-lines completion rows, not used. The `v1` aliases stay on v2.
+- Checked on v5: 0 free-format programs, 0 answers without `PROGRAM-ID`; 638 of 641 answers start with 7 spaces, the other 3 with sequence numbers (`000100`).
+- `sft-v2` run: `ROLE=adapter RUN=sft-v2 DATASET=decontaminated-v2 SAVE_STEPS=36 bash scripts/sft_v1_queue.sh`, eval configs `sft-v2.yaml`, `sft-v2-seed2.yaml`; baseline v2 is reused.
+- The W&B metadata of v3–v5 records commit `c63c99b`, but the code that built them was not committed yet; it is in the commit that adds `data/fixed_format.py`.
+
 ### still missing
-SFT results (A, C), thinking baseline on CobolCodeBench (not run, see above), CodeNet licence (C), reports.
+sft-v2 run and results, thinking baseline on CobolCodeBench (not run, see above), CodeNet licence (C), reports.

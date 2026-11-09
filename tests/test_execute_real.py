@@ -4,6 +4,7 @@ Python tests use the `local` backend with trusted inline snippets, so they need 
 nor cobc. COBOL execution tests use a native cobc if there is one, else the eval-sandbox docker
 image, and are skipped when neither is available.
 """
+import sys
 import shutil
 import subprocess
 
@@ -306,3 +307,10 @@ def test_compile_only_failure_is_compile_error(monkeypatch):
 def test_cobol_compile_only_real(cobol_backend):
     assert execute(HELLO, [], lang="cobol").passed
     assert execute("THIS IS NOT COBOL", [], lang="cobol").status == Status.COMPILE_ERROR
+
+
+def test_run_caps_runaway_output(tmp_path):
+    """A program that prints forever must not fill the runner's memory (it OOM-killed the container)."""
+    p = sandbox_runner.run([sys.executable, "-c", "while True: print('x' * 1000)"], tmp_path, 10)
+    assert p["returncode"] != 0 and not p["timed_out"]
+    assert len(p["stdout"]) <= sandbox_runner.MAX_CAPTURE + 100
