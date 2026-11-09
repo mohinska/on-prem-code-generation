@@ -70,7 +70,16 @@ Both seeds solve about 20 times as many held-out tasks as the base model and agr
 
 The seeds agree on the held-out tasks and on eval loss (≤ 0.002 apart), but not on COBOLEval.
 
-**Exploratory, not part of the verdict:** where COBOLEval compile errors come from. Seed 42 starts the first line of the program in column 1 (`IDENTIFICATION DIVISION.` without the 7-space indent) in 383 of 429 greedy and 2225 of 2893 sampled programs, which fixed-format COBOL rejects (`invalid indicator`, 380 of the greedy compile errors). Seed 43 does so in 326 of 2828 sampled programs; its most frequent compile error is `PROGRAM-ID header missing` (1893). Baseline v2: 36 of 431 greedy, 669 of 2901 sampled. This is the same symptom as artifact 1 of `sft-v0`, now in the model's output although the prompt keeps the indent; its cause was not investigated, and no edited answers are counted anywhere in this report.
+**Exploratory, not part of the verdict:** where COBOLEval compile errors come from. Seed 42 starts the first line of the program in column 1 (`IDENTIFICATION DIVISION.` without the 7-space indent) in 383 of 429 greedy and 2225 of 2893 sampled programs, which fixed-format COBOL rejects (`invalid indicator`, 380 of the greedy compile errors). Seed 43 does so in 326 of 2828 sampled programs; its most frequent compile error is `PROGRAM-ID header missing` (1893). Baseline v2: 36 of 431 greedy, 669 of 2901 sampled. This is the same symptom as artifact 1 of `sft-v0`, now in the model's output although the prompt keeps the indent; no edited answers are counted anywhere in this report.
+
+**What went wrong (diagnosis after the verdict).** Both COBOLEval compile errors come from the training data, not from the prompt or the model:
+
+| Error | Cause in `sft-dataset:decontaminated-v1` | Mostly in |
+|---|---|---|
+| First line from column 1 (`invalid indicator`) | 343 of 670 programs are human CodeNet solutions in free format (code from column 1). The sandbox compiles stdin tasks with `cobc -x`, which detects free format, so they passed; COBOLEval compiles with `-fformat=variable`, where column 7 is the indicator. The model mixes the two styles. | seed 42 |
+| `PROGRAM-ID header missing` | Completion rows (half the data) answer with the remaining lines only; COBOLEval and CobolCodeBench compile the answer alone, without the prompt. | seed 43 |
+
+Each seed picked up a different defect, which explains the spread. Fix for `sft-v2`: free-format programs moved to fixed format and rechecked, completion rows answer with the whole program (`sft-dataset:decontaminated-v2`, [project-log](project-log.md#sft-dataset-v2-fixed-format-whole-program-completion-rows)). The Python drop is not explained by this.
 
 ## 7. Comparison with sft-v0
 
@@ -91,6 +100,6 @@ sft-v1 no longer loses on COBOLEval sampled (seed 42) or gains (seed 43), and it
 
 - Two seeds only; they disagree on COBOLEval, so the size of the COBOLEval effect is not known. The guards were measured for seed 42 only.
 - Held-out tasks use the CodeNet statement's sample tests (few per task), stdin format only, 5 samples per task.
-- The cause of the first-line indentation loss of seed 42 is not established (section 6).
+- The format diagnosis (section 6) was made after the verdict and does not change it.
 - One held-out base program (`codenet/p03971`, greedy) exceeded the sandbox memory limit; it counts as `runtime_error` (project-log, "held-out base execution").
 - Non-thinking only; thinking mode, CobolCodeBench instruct and slice B are outside the criteria.
