@@ -81,6 +81,8 @@ The seeds agree on the held-out tasks and on eval loss (≤ 0.002 apart), but no
 
 Each seed picked up a different defect, which explains the spread. Fix for `sft-v2`: free-format programs moved to fixed format and rechecked, completion rows answer with the whole program (`sft-dataset:decontaminated-v2`, [project-log](project-log.md#sft-dataset-v2-fixed-format-whole-program-completion-rows)). The Python drop is not explained by this.
 
+**Diagnostic check (answers edited, not a result).** The stored answers of base and both seeds repaired by the same two rules and executed again ([project-log](project-log.md#sft-v1-format-repair-diagnostic-answers-edited)). COBOLEval sampled pass@1, base → adapted, both repaired: seed 42 0.032 → 0.274 (Δ +0.242 [+0.191, +0.293]), seed 43 0.032 → 0.261 (Δ +0.229 [+0.183, +0.275]); compile 0.123 → 0.654 / 0.629. With the format right the seeds agree; CobolCodeBench completion shows no difference. It does not change the verdict.
+
 ## 7. Comparison with sft-v0
 
 Different baselines (sft-v0: frozen baseline; sft-v1: baseline v2 for COBOLEval and CobolCodeBench completion), so only the direction is compared.

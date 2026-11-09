@@ -316,5 +316,24 @@ Both defects fixed in the data, nothing in the eval protocol changed.
 - `sft-v2` run: `ROLE=adapter RUN=sft-v2 DATASET=decontaminated-v2 SAVE_STEPS=36 bash scripts/sft_v1_queue.sh`, eval configs `sft-v2.yaml`, `sft-v2-seed2.yaml`; baseline v2 is reused.
 - The W&B metadata of v3–v5 records commit `c63c99b`, but the code that built them was not committed yet; it is in the commit that adds `data/fixed_format.py`.
 
+### sft-v1 format repair (diagnostic, answers edited)
+Not a model result: the stored answers are edited by rule, so it only estimates sft-v1 with the format right. `eval/repair_format.py` on the generations of baseline v2, sft-v1 and sft-v1-seed2 (COBOLEval, CobolCodeBench completion), same rules for base and adapted: first line from column 1 and the rest fixed → first line indented by 7; no `PROGRAM-ID` → program start from the prompt put in front. Executed locally in the sandbox (`--no-wandb`, `outputs/eval-repaired/`), commit of `repair_format.py` below.
+- Rows changed: base 826 indent + 415 prefix of 4416; seed 42 2852 + 1053 of 4416; seed 43 326 + 1945 of 2920.
+
+| group | metric | base | base repaired | seed 42 | seed 42 repaired | seed 43 | seed 43 repaired |
+|---|---|---|---|---|---|---|---|
+| COBOLEval greedy | pass@1 | 0.034 | 0.034 | 0.000 | **0.256** | - | - |
+| | compile | 0.132 | 0.137 | 0.002 | 0.674 | - | - |
+| COBOLEval sampled | pass@1 | 0.021 | 0.032 | 0.021 | **0.274** | 0.055 | **0.261** |
+| | pass@10 | 0.139 | 0.177 | 0.145 | 0.565 | 0.243 | 0.589 |
+| | compile | 0.086 | 0.123 | 0.059 | 0.654 | 0.137 | 0.629 |
+| CCB completion greedy | pass@1 | 0.000 | 0.022 | 0.000 | 0.036 | - | - |
+| CCB completion sampled | pass@1 | 0.009 | 0.025 | 0.000 | 0.022 | - | - |
+| | pass@10 | 0.064 | 0.071 | 0.000 | 0.081 | - | - |
+| | compile | 0.087 | 0.161 | 0.004 | 0.254 | - | - |
+
+- Repaired vs base repaired, paired 95% CI: COBOLEval sampled pass@1 seed 42 +0.242 [+0.191, +0.293], seed 43 +0.229 [+0.183, +0.275]; greedy seed 42 +0.221 [+0.153, +0.288]; pass@10 seed 42 +0.389 [+0.318, +0.462], seed 43 +0.412 [+0.342, +0.486]. CobolCodeBench completion: no difference (greedy +0.014 [-0.022, +0.065], sampled pass@1 -0.003 [-0.014, +0.004]).
+- With the format right both seeds agree on COBOLEval (0.274 and 0.261) and beat base by ~0.23: the spread of sft-v1 is the format defects. sft-v2 (fixed data) is the real test.
+
 ### still missing
 sft-v2 run and results, thinking baseline on CobolCodeBench (not run, see above), CodeNet licence (C), reports.
