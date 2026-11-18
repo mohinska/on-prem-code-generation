@@ -1,8 +1,11 @@
 """sft-dataset rows -> about half of the tasks as completion rows (task 1.5), the rest stay full programs.
 
-A completion row: prompt = task text + program up to DATA DIVISION. + IO_COMPLETE, completion = the whole program.
+A completion row: prompt = program up to DATA DIVISION. + task text + IO_COMPLETE, completion = the whole program.
 The benchmarks (COBOLEval, CobolCodeBench completion) compile the answer alone, so an answer with only the remaining
 lines has no PROGRAM-ID: sft-v1 learned that ("PROGRAM-ID header missing").
+The program comes first, as in the benchmark prompts: the chat template trims the user message, so there the first
+program line reaches the model in column 1 and the rest indented. Here it is trimmed the same way, and the answer
+has the line in column 8 (sft-v1 copied it from column 1: "invalid indicator").
 
     python -m onprem_codegen.data.completion_rows [--dataset sft-dataset:v1-lite | --input sft.jsonl] [--seed 7] [--no-wandb]
 
@@ -58,7 +61,7 @@ def make_completion_rows(rows: list[dict], seed: int, fraction: float = 0.5) -> 
             continue
         prefix, _ = parts
         completion = r["completion"]   # the whole checked program
-        out.append({**r, "prompt": build_prompt(f"{_task_text(r['prompt'])}\n\n{prefix}", IO_COMPLETE),
+        out.append({**r, "prompt": build_prompt(f"{prefix}\n{_task_text(r['prompt'])}", IO_COMPLETE),
                     "completion": completion, "content_sha256": hashlib.sha256(completion.encode()).hexdigest(),
                     "meta": {**(r.get("meta") or {}), "format": "completion"}})
     return out

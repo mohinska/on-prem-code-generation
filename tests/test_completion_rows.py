@@ -28,8 +28,8 @@ def test_round_trip_indent_and_gobacks():
     comp = [r for r in out if is_completion(r)]
     assert comp
     for r in comp:
-        prefix = r["prompt"].split("\n\n", 1)[1].rsplit("\n\n", 1)[0]
-        assert prefix.startswith("       IDENTIFICATION DIVISION.\n")  # indent kept
+        prefix, rest = r["prompt"].split("\n\n", 1)
+        assert prefix.startswith("       IDENTIFICATION DIVISION.\n")  # program first, as in the benchmarks; indent kept
         assert "DATA DIVISION" not in prefix
         body = r["completion"]
         answer = body.removeprefix("```cobol\n").removesuffix("```")
@@ -37,7 +37,7 @@ def test_round_trip_indent_and_gobacks():
         assert PROG.startswith(prefix + "\n")  # the prompt shows its start, unchanged
         assert "GOBACK" in answer
         assert r["content_sha256"] == hashlib.sha256(body.encode()).hexdigest()
-        assert r["prompt"].startswith("Print a digit. ")  # task text recovered from the stored prompt
+        assert rest.startswith("Print a digit. ")  # task text recovered from the stored prompt, after the program
 
 
 def test_share_by_task_not_row_and_seeded():
@@ -69,7 +69,7 @@ def test_blank_lines_before_data_division_go_to_the_answer_so_the_round_trip_sta
     prog = PROG.replace("       DATA DIVISION.", "\n       DATA DIVISION.")
     out = make_completion_rows([row(i, prog) for i in range(10)], seed=7)
     for r in (r for r in out if is_completion(r)):
-        prefix = r["prompt"].split("\n\n", 1)[1].rsplit("\n\n", 1)[0] + "\n"
+        prefix = r["prompt"].split("\n\n", 1)[0] + "\n"
         answer = r["completion"].removeprefix("```cobol\n").removesuffix("```")
         assert answer == prog and prog.startswith(prefix)
 
