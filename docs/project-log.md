@@ -344,5 +344,50 @@ On `sft-dataset:v5` and the stored answers of baseline v2, sft-v1 and sft-v1-see
 - Chat template: it trims the user message (`render_content(...)|trim`), so a prompt that starts with the program loses the 7 spaces of its first line. Every COBOLEval and CobolCodeBench completion prompt reaches the model as `IDENTIFICATION DIVISION.` in column 1 and the rest indented, the pattern seed 42 copied (`invalid indicator`). No `sft-dataset:v5` prompt starts with code, so training never showed this case; fixed in `sft-dataset:v6` (program first in completion rows). Otherwise training and eval render the same: no system message in non-thinking mode, `<think>\n\n</think>\n\n` before the answer, no BOS. TRL appends one more `<|im_end|>` after the template's `<|im_end|>\n`; generation stops at the first one.
 - CobolCodeBench completion (no gain after the repair), seed 42: the tasks are file processing, which the CodeNet training data (stdin tasks) does not have. First errors: undeclared `FILE-STATUS` and other names (184), `OPEN` on SORT files (43), `PIC YYYYMMDD` (28). The prompt says "Complete only the WORKING-STORAGE SECTION and PROCEDURE DIVISION" against our instruction for a whole program: 630 of 1058 answers have no `PROGRAM-ID` (base 415). 173 of 1058 have no program, 171 of them cut at 4096 tokens (repetition loops). The data cannot fix this without file I/O tasks.
 
+### sft-v2 (SFT on fixed data) and its generations
+`ROLE=adapter RUN=sft-v2 DATASET=decontaminated-v2 SAVE_STEPS=36 AUTODESTROY=1 bash scripts/sft_v1_queue.sh` on Vast instance 61295256, 1× RTX PRO 6000 Blackwell Server Edition ($1.81/h, host 120840, Texas), commit `fba4407`, vLLM 0.32.0. Both runs use the sft-v1 settings (QLoRA 4-bit, r 16, alpha 32, lr 2e-4, 3 epochs) on `sft-dataset:decontaminated-v2` (v6), 565 train / 76 eval rows with the same split for both seeds (`data.split_seed` 42), 108 steps, 116,727,808 trainable parameters.
+
+| Run | Seed | Train runtime | Eval loss, step 36 / 72 / 108 | Eval token accuracy, step 108 | Train loss | Adapter |
+|---|---|---|---|---|---|---|
+| [sft-v2](https://wandb.ai/mllab-team/onprem-codegen/runs/sft-v2) | 42 | 1998 s (start 18:02 UTC) | 0.1974 / 0.1648 / 0.1614 | 0.9533 | 0.2205 | `sft-v2-adapter:candidate` (v0) |
+| [sft-v2-seed2](https://wandb.ai/mllab-team/onprem-codegen/runs/sft-v2-seed2) | 43 | 1652 s (start 18:38 UTC) | 0.1994 / 0.1648 / 0.1605 | 0.9533 | 0.2178 | `sft-v2-seed2-adapter:candidate` (v0) |
+
+- Eval loss still falls slightly at epoch 3; the last checkpoint is used. The eval rows differ from sft-v1 (other data), so the losses are not comparable with it.
+- `check` passed at 19:14:50 UTC. Generations (same configs as sft-v1 with `sft-v2*.yaml`; 0 failed requests, 0 rows with `</think>`):
+
+| Artifact `eval-generations:` | Version | Run | Size, time |
+|---|---|---|---|
+| `sft-v2` | v11 | [p24jwixw](https://wandb.ai/mllab-team/onprem-codegen/runs/p24jwixw) | 9246 rows, all groups; 2 h 32 min (19:14–21:47 UTC) |
+| `heldout-sft-v2` | v12 | [le1grcqm](https://wandb.ai/mllab-team/onprem-codegen/runs/le1grcqm) | 2526 rows; 3 h 0 min (21:47–00:47 UTC) |
+| `sft-v2-seed2` | v13 | [431svsu0](https://wandb.ai/mllab-team/onprem-codegen/runs/431svsu0) | 2920 rows, COBOLEval sampled only; 29 min |
+| `heldout-sft-v2-seed2` | v14 | [yg08ehd2](https://wandb.ai/mllab-team/onprem-codegen/runs/yg08ehd2) | 2526 rows; 3 h 15 min (01:16–04:31 UTC) |
+
+- Whole queue: 18:02–04:31 UTC (≈ 10 h 30 min). With `AUTODESTROY=1` the instance destroyed itself after `verify-wandb`; all four artifacts `COMMITTED`.
+- Truncated (`finish_reason` length): sft-v2 281 of 9246 (COBOLEval 40, CobolCodeBench 241, HumanEval 0), seed 2 34 of 2920; held-out 505 (seed 42) and 581 (seed 43) of 2526, base 653.
+- The W&B owner of the training and generation runs is `irynkasv` (W&B key from the Vast account environment variables).
+- SSH on the team account: `vastai create ssh-key` fails ("Team SSH keys are not supported"); `vastai attach ssh <instance_id> "$(cat ~/.ssh/id_ed25519.pub)"` adds the key to one instance.
+
+### sft-v2 verdict
+Execution locally in `eval-sandbox` (Docker Desktop, macOS) at commit `fba4407`: [sft-v2](https://wandb.ai/mllab-team/onprem-codegen/runs/ne6bnoeq) (`eval-results:sft-v2`, v10, 9246 rows), [sft-v2-seed2](https://wandb.ai/mllab-team/onprem-codegen/runs/846o8n4p) (`eval-results:sft-v2-seed2`, v11, 2920 rows); held-out `heldout execute --models base cobol cobol-seed2 --out outputs/eval/heldout-v2` (2526 rows per model). Baseline as for sft-v1: `eval-results:baseline-v2` (v7) and the frozen baseline (`baseline-final-non-thinking`, v1). Criteria of [sft-v1-preregistration.md](sft-v1-preregistration.md), unchanged; `eval.verdict` at `fba4407`.
+
+**Вердикт: успіх без guard Python** (both seeds agree on the main criterion).
+
+| Criterion (seed 42) | Met | Numbers |
+|---|---|---|
+| Main: COBOLEval sampled pass@1, compile rate | yes | 0.021 → 0.274, Δ +0.253 [+0.204, +0.303]; compile 0.086 → 0.618 |
+| Extra: COBOLEval pass@10, greedy pass@1 | yes | pass@10 0.139 → 0.592, Δ +0.453 [+0.383, +0.523]; greedy 0.034 → 0.281, Δ +0.247 [+0.178, +0.313] |
+| Guard Python | no | HumanEval-Python sampled pass@1 0.969 → 0.928, Δ −0.041 [−0.066, −0.019] |
+| Guard CobolCodeBench completion | yes | Δ pass@1 +0.017 [−0.002, +0.047]; truncation 0.103 → 0.166 |
+| Training works (held-out) | yes | sampled pass@1 0.003 → 0.075, Δ +0.072 [+0.053, +0.091] |
+| Seed 43: main | yes | 0.021 → 0.282, Δ +0.261 [+0.207, +0.313]; compile 0.086 → 0.622; pass@10 0.577, Δ +0.438 [+0.371, +0.503] |
+| Seed 43: training works | yes | 0.003 → 0.093, Δ +0.089 [+0.068, +0.112] |
+
+- Both format defects are gone: 0 `invalid indicator` in all COBOLEval and CobolCodeBench completion answers of both seeds; `PROGRAM-ID header missing` 1 of 4416 (seed 42, CobolCodeBench) and 0 of 2920 (seed 43). sft-v1 had 2225 and 383 (seed 42, COBOLEval sampled). COBOLEval sampled pass@1 0.274 / 0.282 matches sft-v1 after the format repair (0.274 / 0.261), now without editing answers.
+- Other groups, seed 42 vs base: CobolCodeBench completion greedy pass@1 0.000 → 0.029 (compile 0.072 → 0.268), sampled 0.009 → 0.026 (pass@10 0.064 → 0.071, compile 0.087 → 0.227); CobolCodeBench instruct sampled 0.001 → 0.000 (compile 0.109 → 0.079); HumanEval-Python greedy 0.972 → 0.931, sampled pass@10 0.994 → 0.979. Held-out greedy pass@1 0.005 → 0.064 (seed 42) and 0.107 (seed 43), sampled pass@5 0.012 → 0.166 and 0.195.
+- Python drop is the same as sft-v1 (sampled 0.919, greedy 0.925): the data format fix did not change it.
+- Remaining COBOLEval compile errors (seed 42 sampled, 1084) are COBOL usage, as in sft-v1 after the repair: `unexpected Identifier` 163, arithmetic in `PERFORM VARYING ... FROM I + 1` 135 and `... TO` 42, undefined names 109, unknown functions 108, `unexpected END PROGRAM` 85. Seed 43 has the same pattern (1064).
+- The laptop slept during the seed-42 and held-out execution (≈ 07:00–10:45 UTC); the jobs paused and resumed. Held-out base reproduced the earlier execution exactly (same status counts as "held-out base execution"), and the COBOLEval sampled timeouts are 43 of 1805 compiled programs for seed 42 vs 37 of 1817 for seed 43 (run awake), so there is no sign of false timeouts. A false timeout could only lower seed 42.
+- `sft-v2-adapter:candidate` stays `candidate`: the Python guard is not met.
+
 ### still missing
-sft-v2 run and results, thinking baseline on CobolCodeBench (not run, see above), CodeNet licence (C), reports.
+thinking baseline on CobolCodeBench (not run, see above), CodeNet licence (C), reports.
