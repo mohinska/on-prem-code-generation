@@ -368,7 +368,7 @@ On `sft-dataset:v5` and the stored answers of baseline v2, sft-v1 and sft-v1-see
 - SSH on the team account: `vastai create ssh-key` fails ("Team SSH keys are not supported"); `vastai attach ssh <instance_id> "$(cat ~/.ssh/id_ed25519.pub)"` adds the key to one instance.
 
 ### sft-v2 verdict
-Execution locally in `eval-sandbox` (Docker Desktop, macOS) at commit `fba4407`: [sft-v2](https://wandb.ai/mllab-team/onprem-codegen/runs/ne6bnoeq) (`eval-results:sft-v2`, v10, 9246 rows), [sft-v2-seed2](https://wandb.ai/mllab-team/onprem-codegen/runs/846o8n4p) (`eval-results:sft-v2-seed2`, v11, 2920 rows); held-out `heldout execute --models base cobol cobol-seed2 --out outputs/eval/heldout-v2` (2526 rows per model). Baseline as for sft-v1: `eval-results:baseline-v2` (v7) and the frozen baseline (`baseline-final-non-thinking`, v1). Criteria of [sft-v1-preregistration.md](sft-v1-preregistration.md), unchanged; `eval.verdict` at `fba4407`.
+Execution locally in `eval-sandbox` (Docker Desktop, macOS) at commit `fba4407`: [sft-v2](https://wandb.ai/mllab-team/onprem-codegen/runs/ne6bnoeq) (`eval-results:sft-v2`, v10, 9246 rows), [sft-v2-seed2](https://wandb.ai/mllab-team/onprem-codegen/runs/846o8n4p) (`eval-results:sft-v2-seed2`, v11, 2920 rows); held-out `heldout execute --models base cobol cobol-seed2 --out outputs/eval/heldout-v2` (2526 rows per model). Baseline as for sft-v1: `eval-results:baseline-v2` (v7) and the frozen baseline (`baseline-final-non-thinking`, v1). Criteria of [sft-v1-preregistration.md](sft-v1-preregistration.md), unchanged; `eval.verdict` at `fba4407`. Report: [sft-v2.md](sft-v2.md).
 
 **Вердикт: успіх без guard Python** (both seeds agree on the main criterion).
 
