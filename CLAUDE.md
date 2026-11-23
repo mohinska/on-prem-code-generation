@@ -4,7 +4,8 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 **Status:** in progress. `data/`, `train/sft.py`, `eval/`, `serve/` (adapter key fix, check) and `prompt.py` exist, with
 `requirements.txt`, Makefile, configs and tests. `sft-v0`, `sft-v1`, `sft-v2` done; `sft-v2` meets the COBOLEval criteria
-but not the HumanEval-Python guard ([docs/sft-v2.md](docs/sft-v2.md)). Not written yet: DPO/GRPO, W&B registry step (`make register`).
+but not the HumanEval-Python guard ([docs/sft-v2.md](docs/sft-v2.md)). Gemma 4 31B comparison (same SFT) ready to run.
+Not written yet: DPO/GRPO, W&B registry step (`make register`).
 
 ## Project goal
 Domain-adapt an open code model to a low-resource / legacy programming language, fully self-hostable
@@ -16,6 +17,8 @@ W&B dashboards + model registry, base-vs-adapted evaluation report, live before/
 - **Target language:** COBOL. Benchmark: COBOLEval, executed with GnuCOBOL.
 - **Base model:** `Qwen/Qwen3.8-27B` — dense 27B, hybrid Gated DeltaNet + Gated Attention, multimodal,
   thinking mode by default, Apache 2.0.
+- **Comparison model:** `google/gemma-4-31B-it` — dense 31B, multimodal, Apache 2.0. Same SFT data, settings,
+  eval protocol and criteria as sft-v2; config `configs/train/sft_gemma4.yaml`.
 - **Compute:** Vast.ai team account. 1× 80 GB by default; scale to 2× 80 GB only for GRPO / final runs.
   Instances are ephemeral.
 - **Stack:** TRL + PEFT for training (SFT, DPO, GRPO); Hydra configs per stage;

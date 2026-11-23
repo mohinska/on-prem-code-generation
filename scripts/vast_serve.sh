@@ -3,6 +3,7 @@
 # vLLM goes into its own venv: it needs torch==2.13.0, which differs from the training image.
 # Needs env: WANDB_API_KEY, WANDB_ENTITY, WANDB_PROJECT, HF_TOKEN; run from the repo root.
 #   ADAPTER=sft-v1-adapter:candidate bash scripts/vast_serve.sh      # default: sft-v0-adapter:candidate
+#   MODEL=google/gemma-4-31B-it ADAPTER=sft-gemma4-adapter:candidate bash scripts/vast_serve.sh   # Gemma 4 comparison
 # On the laptop:  ssh -p <PORT> root@<HOST> -N -L 8000:localhost:8000  then  python -m onprem_codegen.serve.check
 set -euo pipefail
 

@@ -3,7 +3,7 @@
 # Idempotent: safe to re-run after a restart. Log: /var/log/onstart.log when passed via --onstart.
 #
 # Needs Vast account env vars: GITHUB_TOKEN (read-only, this repo), WANDB_API_KEY, WANDB_ENTITY,
-# WANDB_PROJECT, HF_TOKEN. Optional: BRANCH (default main).
+# WANDB_PROJECT, HF_TOKEN. Optional: BRANCH (default main), MODEL (base weights to download, default Qwen/Qwen3.8-27B).
 set -euo pipefail
 
 REPO_DIR=/workspace/on-prem-code-generation
@@ -33,7 +33,7 @@ export PYTHONPATH=$REPO_DIR/src
 cd $REPO_DIR
 EOF
 
-# ~54 GB; resumes if interrupted. Vision / MTP weights come along but are never loaded.
-hf download Qwen/Qwen3.8-27B > /dev/null
+# ~54 GB (Gemma 4 31B: ~62 GB); resumes if interrupted. Vision / MTP weights come along but are never loaded.
+hf download "${MODEL:-Qwen/Qwen3.8-27B}" > /dev/null
 
 echo "onstart: done"

@@ -1,0 +1,23 @@
+# Comparison model: SFT of Gemma 4 31B with the sft-v2 data and settings; only the model and its LoRA modules differ.
+# Everything not set here comes from sft.yaml and sft_smoke.yaml.
+#   python -m onprem_codegen.train.sft --config-name sft_gemma4 data.artifact=sft-dataset:decontaminated-v2
+defaults:
+  - sft
+  - _self_
+
+run_name: sft-gemma4
+
+model:
+  name: google/gemma-4-31B-it   # loaded as the text-only Gemma4ForCausalLM (train/sft.py text_only_kwargs)
+
+lora:
+  # Verified against transformers 5.17 Gemma4ForCausalLM: 60 layers, 50 sliding + 10 full attention. Full-attention
+  # layers have no v_proj (attention_k_eq_v: V comes from k_proj), so they get LoRA on q, k, o and the MLP.
+  target_modules:
+    - q_proj
+    - k_proj
+    - v_proj
+    - o_proj
+    - gate_proj              # MLP
+    - up_proj
+    - down_proj

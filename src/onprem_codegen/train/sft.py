@@ -18,13 +18,22 @@ import wandb
 from datasets import load_dataset
 from omegaconf import DictConfig, OmegaConf
 from peft import LoraConfig
-from transformers import AutoModelForCausalLM, AutoTokenizer, BitsAndBytesConfig, TrainerCallback
+from transformers import AutoConfig, AutoModelForCausalLM, AutoTokenizer, BitsAndBytesConfig, TrainerCallback
+from transformers.models.auto.modeling_auto import MODEL_FOR_CAUSAL_LM_MAPPING_NAMES
 from transformers.trainer_utils import get_last_checkpoint
 from trl import SFTConfig, SFTTrainer
 
 from onprem_codegen.utils import git_commit
 
 CONFIG_DIR = str(Path(__file__).resolve().parents[3] / "configs" / "train")
+
+
+def text_only_kwargs(config) -> dict:
+    """Qwen3.8: the causal-LM auto class is already text-only. Gemma 4: it is the multimodal class, so load the text
+    class from the multimodal checkpoint (`model.language_model.*` -> `model.*`); vision weights are skipped."""
+    if not MODEL_FOR_CAUSAL_LM_MAPPING_NAMES.get(config.model_type, "").endswith("ForConditionalGeneration"):
+        return {}
+    return {"config": config.get_text_config(), "key_mapping": {r"^model\.language_model\.": "model."}}
 
 
 def load_model(cfg: DictConfig, path: str):
@@ -37,6 +46,7 @@ def load_model(cfg: DictConfig, path: str):
             bnb_4bit_use_double_quant=True,
         )
         kwargs["device_map"] = {"": 0}
+    kwargs |= text_only_kwargs(AutoConfig.from_pretrained(path))
     # Text-only class: the vision encoder is never instantiated.
     model, info = AutoModelForCausalLM.from_pretrained(path, output_loading_info=True, **kwargs)
     if info["missing_keys"]:
@@ -44,15 +54,31 @@ def load_model(cfg: DictConfig, path: str):
     return model
 
 
+END_SENTINEL = "ANSWER-END-SENTINEL"
+
+
 def to_prompt_completion(tok, example: dict) -> dict:
-    """Render with the chat template in non-thinking mode (empty <think> block)."""
+    """Render with the chat template in non-thinking mode; the prompt is what the server sends at eval time.
+
+    Qwen: the full conversation continues the generation prompt with the answer, so the completion is the rest of it.
+    Gemma 4 does not: its generation prompt ends with an empty thought channel that the rendered model turn lacks.
+    Then the completion is the answer verbatim plus the template's end of turn. Both templates trim the answer;
+    sft-dataset answers are fenced (```cobol ... ```), so for them both ways give the same text.
+    """
     user = [{"role": "user", "content": example["prompt"]}]
+    answer = example["completion"]
+
+    def render(content):
+        return tok.apply_chat_template(user + [{"role": "assistant", "content": content}], tokenize=False,
+                                       enable_thinking=False)
+
     prompt = tok.apply_chat_template(user, tokenize=False, add_generation_prompt=True, enable_thinking=False)
-    full = tok.apply_chat_template(
-        user + [{"role": "assistant", "content": example["completion"]}], tokenize=False, enable_thinking=False
-    )
-    assert full.startswith(prompt), "chat template: prompt is not a prefix of the full conversation"
-    return {"prompt": prompt, "completion": full[len(prompt):]}
+    full = render(answer)
+    if full.startswith(prompt + answer):
+        return {"prompt": prompt, "completion": full[len(prompt):]}
+    end = render(END_SENTINEL).split(END_SENTINEL)[-1]
+    assert end and END_SENTINEL not in end, "chat template: no end of turn after the answer"
+    return {"prompt": prompt, "completion": answer + end}
 
 
 def split_indices(task_ids: list, eval_fraction: float, seed: int) -> tuple[list[int], list[int]]:

@@ -6,6 +6,7 @@ Every dataset, run, sweep and eval is tracked in Weights & Biases. Project brief
 > **Status:** in progress. Data, SFT, baseline eval and serving are done ([interim report](docs/interim-report.md)).
 > Three SFT runs: [sft-v0](docs/sft-v0.md), [sft-v1](docs/sft-v1.md), [sft-v2](docs/sft-v2.md). `sft-v2` raises COBOLEval
 > sampled pass@1 from 0.021 to 0.274 (seed 42) and 0.282 (seed 43), but HumanEval-Python drops by 0.041 (limit 0.02).
+> The same SFT on Gemma 4 31B (comparison) is ready to run: see [SFT run](#sft-run).
 > Preference tuning and the model registry are not written yet.
 
 ## Pipeline
@@ -35,6 +36,7 @@ Each stage reads its inputs from W&B artifacts and logs new versions, so lineage
 |---|---|
 | Language, benchmark | **COBOL**; COBOLEval executed with GnuCOBOL. pass@1/pass@10, compile rate, HumanEval-Python for forgetting. |
 | Base model | **`Qwen/Qwen3.8-27B`** (dense, Apache 2.0). Text part only; vision encoder frozen. |
+| Comparison model | `google/gemma-4-31B-it` (dense, Apache 2.0): same data, settings and protocol as sft-v2. |
 | Fine-tuning | QLoRA (4-bit) on 1× 80 GB. SFT in non-thinking mode; eval in both modes. |
 | Preference tuning | DPO on offline pass/fail pairs. GRPO (compile + test reward) is a stretch goal on 2× 80 GB. |
 | Data | Stack v1 (full, we dedup), X-COBOL, CodeNet. Files are flagged (`kept`, `filter_reason`), never deleted. `.cpy` copybooks are excluded from SFT. |
@@ -139,6 +141,18 @@ grep -h progress outputs/sft-v2-queue/adapter/queue.log outputs/sft-v2-queue/ada
 
 `DRY_RUN=1` prints every command; a re-run skips finished steps; `AUTODESTROY=1` destroys the instance once W&B
 holds every artifact of the role (use it after one run without it). Generations go to W&B; execute them locally ([Eval](#eval)).
+
+**Gemma 4 comparison.** Same queue with another model; both roles are needed, because there is no Gemma baseline yet:
+
+```bash
+# on the Vast instances (in tmux), not on the laptop; one role per instance
+RUN=sft-gemma4 MODEL=google/gemma-4-31B-it BASE_RUN=gemma4-baseline BASE_HELDOUT=heldout-gemma4-base \
+  ROLE=base bash scripts/sft_v1_queue.sh
+RUN=sft-gemma4 MODEL=google/gemma-4-31B-it TRAIN_CONFIG=sft_gemma4 DATASET=decontaminated-v2 SAVE_STEPS=36 \
+  ROLE=adapter bash scripts/sft_v1_queue.sh
+```
+
+Start the instances with `--env MODEL=google/gemma-4-31B-it`, so `vast_onstart.sh` downloads Gemma (~62 GB) instead of Qwen.
 
 Serving a trained model is described in [Run the trained model](#run-the-trained-model).
 

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# One-off sft-v1 queue on a fresh Vast instance (plan 2.1-2.3). Two roles, so two instances can run in parallel:
+# SFT queue on a fresh Vast instance (sft-v1, sft-v2, Gemma 4 comparison). Two roles, so two instances can run in parallel:
 #   ROLE=base     serve `base` only -> baseline v2 generations + held-out generations for base (no training)
 #   ROLE=adapter  train sft-v1 (seed 42) and sft-v1-seed2 (seed 43) -> serve base + cobol + cobol-seed2 ->
 #                 sft-v1 generations (3 benchmarks) + held-out for cobol; COBOLEval sampled + held-out for cobol-seed2
@@ -13,6 +13,10 @@
 #   cd /workspace/on-prem-code-generation && ROLE=adapter AUTODESTROY=1 bash scripts/sft_v1_queue.sh
 # RUN=sft-v2 DATASET=decontaminated-v2: the same adapter queue for another run name and dataset alias
 # (configs/eval/$RUN.yaml and $RUN-seed2.yaml must exist).
+# Another model (Gemma 4 comparison): MODEL (served and trained), TRAIN_CONFIG (its LoRA modules), and for ROLE=base
+# BASE_RUN (eval config of the base model) and BASE_HELDOUT (W&B alias of its held-out generations):
+#   RUN=sft-gemma4 MODEL=google/gemma-4-31B-it BASE_RUN=gemma4-baseline BASE_HELDOUT=heldout-gemma4-base ROLE=base ...
+#   RUN=sft-gemma4 MODEL=google/gemma-4-31B-it TRAIN_CONFIG=sft_gemma4 DATASET=decontaminated-v2 SAVE_STEPS=36 ROLE=adapter ...
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
@@ -29,6 +33,10 @@ fi
 
 export HF_HOME=${HF_HOME:-/workspace/hf-cache} PYTHONPATH=$PWD/src
 RUN=${RUN:-sft-v1}
+MODEL=${MODEL:-Qwen/Qwen3.8-27B}
+TRAIN_CONFIG=${TRAIN_CONFIG:-sft}
+BASE_RUN=${BASE_RUN:-baseline-v2}
+BASE_HELDOUT=${BASE_HELDOUT:-heldout-base}
 Q=${QUEUE_DIR:-$PWD/outputs/$RUN-queue}/$ROLE
 VENV=/workspace/vllm-env
 URL=http://localhost:8000/v1
@@ -46,8 +54,8 @@ up() { curl -sf "$URL/models" > /dev/null; }
 
 train() {   # run_name seed
   if [ "$DRY" != 1 ] && up; then echo "vLLM is running on :8000: stop it before training"; return 1; fi
-  x python -m onprem_codegen.train.sft --config-name sft run_name="$1" seed="$2" data.split_seed=42 data.artifact=$DATA \
-    train.save_steps=$SAVE_STEPS
+  x python -m onprem_codegen.train.sft --config-name "$TRAIN_CONFIG" run_name="$1" seed="$2" model.name="$MODEL" \
+    data.split_seed=42 data.artifact=$DATA train.save_steps=$SAVE_STEPS
 }
 step_train_sft_v1() { train "$RUN" 42; }
 step_train_sft_v1_seed2() { train "$RUN-seed2" 43; }
@@ -76,7 +84,7 @@ if [ "$ROLE" = base ]; then
 else
   SERVE=(env ADAPTER_PATH=/adapters/cobol EXTRA_LORA_MODULES=cobol-seed2=/adapters/cobol-seed2)
 fi
-SERVE+=(PATH="$VENV/bin:$PATH" bash docker/serve-entrypoint.sh)
+SERVE+=(MODEL="$MODEL" PATH="$VENV/bin:$PATH" bash docker/serve-entrypoint.sh)
 [ "$ROLE" = adapter ] && SERVE+=(--max-loras 2)
 step_serve() {
   if [ "$DRY" = 1 ]; then echo "+ nohup ${SERVE[*]//"$PATH"/\$PATH} > $Q/logs/vllm.log 2>&1 &"; return; fi
@@ -124,8 +132,8 @@ heldout() {   # served model, W&B alias
   x wandb artifact put "outputs/eval/heldout/$1/generations.jsonl" --name "$P/eval-generations" \
     --type generations --alias "$2"
 }
-step_generate_baseline_v2() { evalgen baseline-v2; }
-step_heldout_base() { heldout base heldout-base; }
+step_generate_baseline() { evalgen "$BASE_RUN"; }
+step_heldout_base() { heldout base "$BASE_HELDOUT"; }
 step_generate_sft_v1() { evalgen "$RUN"; }
 step_heldout_sft_v1() { heldout cobol "heldout-$RUN"; }
 step_generate_sft_v1_seed2() { evalgen "$RUN-seed2"; }
@@ -141,7 +149,7 @@ for ref in sys.argv[1:]:
 PY
 }
 if [ "$ROLE" = base ]; then
-  EXPECTED=(eval-generations:baseline-v2 eval-generations:heldout-base)
+  EXPECTED=("eval-generations:$BASE_RUN" "eval-generations:$BASE_HELDOUT")
 else
   EXPECTED=("$RUN-adapter:candidate" "$RUN-seed2-adapter:candidate" "eval-generations:$RUN"
             "eval-generations:$RUN-seed2" "eval-generations:heldout-$RUN" "eval-generations:heldout-$RUN-seed2")
@@ -167,7 +175,7 @@ step_destroy() {
 # ---------- queue ----------
 
 if [ "$ROLE" = base ]; then
-  STEPS=(benchmarks task-pool vllm-env serve check generate-baseline-v2 heldout-base)
+  STEPS=(benchmarks task-pool vllm-env serve check generate-baseline heldout-base)
 else
   STEPS=(train-sft-v1 train-sft-v1-seed2 benchmarks task-pool vllm-env adapters serve check
          generate-sft-v1 heldout-sft-v1 generate-sft-v1-seed2 heldout-sft-v1-seed2)
@@ -181,7 +189,7 @@ if [ "$DRY" != 1 ]; then
   used=$(nvidia-smi --query-gpu=memory.used --format=csv,noheader,nounits | head -1)
   if [ "$used" -gt 2000 ] && ! up; then echo "GPU has ${used} MiB in use by something that is not our server"; exit 1; fi
 fi
-echo "$RUN queue, ROLE=$ROLE, data $DATA, steps: ${STEPS[*]}"
+echo "$RUN queue, ROLE=$ROLE, model $MODEL, data $DATA, steps: ${STEPS[*]}"
 echo "watch:  tail -f $Q/queue.log"
 echo "        grep -h progress $Q/queue.log $Q/logs/*.log | tail"
 echo "        tail -f $Q/logs/<step>.log          # current step's output (training, N/M requests)"

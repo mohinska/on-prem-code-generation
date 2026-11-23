@@ -52,3 +52,21 @@ def test_seed2_is_coboleval_sampled_only_on_its_own_served_model(run):
     assert new["server"]["model"] == "cobol-seed2" and new["modes"] == ["non_thinking"]
     assert new["benchmarks"] == {"coboleval": ["completion"]} and new["decodings"] == ["sampled"]
     assert _strip(new, "benchmarks", "decodings") == _strip(base, "benchmarks", "decodings")
+
+
+def test_gemma4_baseline_is_the_baseline_protocol_non_thinking_on_every_benchmark():
+    base, new = _load("baseline.yaml"), _load("gemma4-baseline.yaml")
+    assert new["model_name"] == "google/gemma-4-31B-it" and new["run_name"] == "gemma4-baseline"
+    assert new["adapter"] is None and new["server"]["model"] == "base" and new["modes"] == ["non_thinking"]
+    assert _strip(new, "model_name") == _strip(base, "model_name")   # all benchmarks: no frozen Gemma baseline
+
+
+def test_sft_gemma4_runs_match_the_sft_v2_runs_except_the_model():
+    for run in ("sft-gemma4", "sft-gemma4-seed2"):
+        qwen, gemma = _load(run.replace("sft-gemma4", "sft-v2") + ".yaml"), _load(f"{run}.yaml")
+        assert gemma["model_name"] == "google/gemma-4-31B-it" and gemma["run_name"] == run
+        assert gemma["adapter"] == f"{run}-adapter:candidate"
+        for cfg in (qwen, gemma):
+            for key in ("run_name", "adapter", "model_name"):
+                cfg.pop(key)
+        assert gemma == qwen      # same benchmarks, decodings, served model name, seed, execute settings

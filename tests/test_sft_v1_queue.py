@@ -37,11 +37,12 @@ def test_base_role_serves_base_only_and_generates_baseline_v2_and_heldout_base(t
     r = _run(tmp_path, ROLE="base", AUTODESTROY="1", CONTAINER_ID="123")
     assert r.returncode == 0, r.stderr
     assert _steps(r.stdout) == ["benchmarks", "task-pool", "vllm-env", "serve", "check",
-                                "generate-baseline-v2", "heldout-base", "verify-wandb", "destroy"]
+                                "generate-baseline", "heldout-base", "verify-wandb", "destroy"]
     cmds = _cmds(r.stdout)
     assert not any("onprem_codegen.train.sft" in c for c in cmds)
     serve = next(c for c in cmds if "serve-entrypoint.sh" in c)
     assert "ADAPTER_PATH=/nonexistent" in serve and "EXTRA_LORA_MODULES" not in serve
+    assert "MODEL=Qwen/Qwen3.8-27B " in serve
     assert "check_served base" in cmds
     assert any("eval.run --config configs/eval/baseline-v2.yaml --stage generate" in c for c in cmds)
     assert any("eval.heldout generate --models base" in c for c in cmds)
@@ -63,7 +64,8 @@ def test_adapter_role_trains_two_seeds_then_serves_both_adapters_and_generates(t
     for c, name, seed in zip(train, ("sft-v1", "sft-v1-seed2"), (42, 43)):
         assert f"run_name={name} " in c and f"seed={seed} " in c
         assert "data.split_seed=42" in c          # same eval split for both seeds: only training noise differs
-        assert "--config-name sft" in c and "data.artifact=sft-dataset:decontaminated-v1" in c
+        assert "--config-name sft " in c and "data.artifact=sft-dataset:decontaminated-v1" in c
+        assert "model.name=Qwen/Qwen3.8-27B " in c
     assert any("sft-v1-adapter:candidate --root /adapters/cobol" in c for c in cmds)
     assert any("sft-v1-seed2-adapter:candidate --root /adapters/cobol-seed2" in c for c in cmds)
     assert sum("serve.adapter_keys" in c for c in cmds) == 2
@@ -108,3 +110,37 @@ def test_destroy_skips_the_confirmation_prompt_and_fails_loudly_if_the_instance_
     assert "destroy instance $CONTAINER_ID -y" in destroy and "< /dev/null" in destroy
     assert "/workspace/vllm-env/bin/vastai" in destroy          # own venv: system pip may be externally managed
     assert "still running" in destroy                           # the destroy is checked, not assumed
+
+
+GEMMA = {"RUN": "sft-gemma4", "MODEL": "google/gemma-4-31B-it"}
+
+
+def test_gemma_base_role_serves_gemma_and_generates_its_own_baseline(tmp_path):
+    r = _run(tmp_path, ROLE="base", AUTODESTROY="1", CONTAINER_ID="123", BASE_RUN="gemma4-baseline",
+             BASE_HELDOUT="heldout-gemma4-base", **GEMMA)
+    assert r.returncode == 0, r.stderr
+    cmds = _cmds(r.stdout)
+    assert "MODEL=google/gemma-4-31B-it " in next(c for c in cmds if "serve-entrypoint.sh" in c)
+    assert any("eval.run --config configs/eval/gemma4-baseline.yaml --stage generate" in c for c in cmds)
+    assert any("--alias heldout-gemma4-base" in c for c in cmds)
+    verify = next(c for c in cmds if "verify" in c)
+    assert "eval-generations:gemma4-baseline" in verify and "eval-generations:heldout-gemma4-base" in verify
+    assert "baseline-v2" not in r.stdout and "eval-generations:heldout-base" not in verify
+    _no_secrets(r)
+
+
+def test_gemma_adapter_role_trains_with_its_config_and_serves_gemma(tmp_path):
+    r = _run(tmp_path, ROLE="adapter", TRAIN_CONFIG="sft_gemma4", DATASET="decontaminated-v2", SAVE_STEPS="36", **GEMMA)
+    assert r.returncode == 0, r.stderr
+    cmds = _cmds(r.stdout)
+    train = [c for c in cmds if "onprem_codegen.train.sft" in c]
+    assert len(train) == 2
+    for c, name, seed in zip(train, ("sft-gemma4", "sft-gemma4-seed2"), (42, 43)):
+        assert "--config-name sft_gemma4 " in c and "model.name=google/gemma-4-31B-it " in c
+        assert f"run_name={name} " in c and f"seed={seed} " in c and "data.split_seed=42" in c
+        assert "data.artifact=sft-dataset:decontaminated-v2" in c and "train.save_steps=36" in c
+    assert "MODEL=google/gemma-4-31B-it " in next(c for c in cmds if "serve-entrypoint.sh" in c)
+    assert any("sft-gemma4-adapter:candidate --root /adapters/cobol" in c for c in cmds)
+    order = [c for c in cmds if "eval.run" in c or "eval.heldout" in c]
+    assert "configs/eval/sft-gemma4.yaml" in order[0] and "configs/eval/sft-gemma4-seed2.yaml" in order[2]
+    _no_secrets(r)
