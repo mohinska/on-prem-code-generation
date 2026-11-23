@@ -3,8 +3,9 @@
 Domain-adapts an open code model to COBOL and serves it on our own hardware, with no external model APIs.
 Every dataset, run, sweep and eval is tracked in Weights & Biases. Project brief: [docs/one-pager.pdf](docs/one-pager.pdf).
 
-> **Status:** in progress. Data, SFT, baseline eval, serving and `sft-v0` are done ([interim report](docs/interim-report.md)).
-> `sft-v1` (fixed prompt, `GOBACK` data, completion rows) is ready to run: see [sft-v1 run](#sft-v1-run).
+> **Status:** in progress. Data, SFT, baseline eval and serving are done ([interim report](docs/interim-report.md)).
+> Three SFT runs: [sft-v0](docs/sft-v0.md), [sft-v1](docs/sft-v1.md), [sft-v2](docs/sft-v2.md). `sft-v2` raises COBOLEval
+> sampled pass@1 from 0.021 to 0.274 (seed 42) and 0.282 (seed 43), but HumanEval-Python drops by 0.041 (limit 0.02).
 > Preference tuning and the model registry are not written yet.
 
 ## Pipeline
@@ -55,14 +56,15 @@ Keep this section up to date whenever you add, move or remove a top-level direct
 ├── data/                    # local scratch, gitignored except manifests/ (one YAML per source)
 ├── docker/                  # train, serve, eval-sandbox images
 ├── docs/                    # project brief, dataset plan, contracts, project-log.md, evaluation reports
-├── scripts/                 # vast_onstart.sh (bootstrap), vast_serve.sh (serve base + adapter), sft_v1_queue.sh (one-off sft-v1 run)
+├── scripts/                 # vast_onstart.sh (bootstrap), vast_serve.sh (serve base + adapter), sft_v1_queue.sh (SFT queue, sft-v1 and sft-v2)
 ├── src/onprem_codegen/
 │   ├── prompt.py            # build_prompt, shared by SFT data and eval
 │   ├── utils.py
 │   ├── data/                # collect, filters, dedup, decontaminate, clean, CodeNet, rejection sampling,
-│   │                        # held-out task split, v1-lite builder (GOBACK), completion rows
+│   │                        # held-out task split, fixed format + GOBACK, completion rows
 │   ├── train/               # SFT (DPO, GRPO planned)
-│   ├── eval/                # sandboxed execute(), benchmark loader, generate -> execute -> metrics -> W&B, held-out test, sft-v1 verdict
+│   ├── eval/                # sandboxed execute(), benchmark loader, generate -> execute -> metrics -> W&B, held-out test,
+│   │                        # verdict by the preregistered criteria, format repair diagnostic
 │   └── serve/               # adapter key fix for vLLM, server check
 ├── tests/
 ├── tasks/                   # local plans (gitignored)
@@ -115,24 +117,28 @@ vastai destroy instance <INSTANCE_ID>
 Without a custom image: start from `pytorch/pytorch:2.11.0-cuda12.8-cudnn9-devel` with
 `--onstart scripts/vast_onstart.sh` (clones the repo, installs `requirements.txt`, downloads the base weights).
 
-## sft-v1 run
+## SFT run
 
-Criteria are fixed before training in [docs/sft-v1-preregistration.md](docs/sft-v1-preregistration.md).
+Criteria are fixed before training in [docs/sft-v1-preregistration.md](docs/sft-v1-preregistration.md) and apply to every SFT run.
 `scripts/sft_v1_queue.sh` has two roles, so two instances run in parallel (both started with `vast_onstart.sh`):
 
 | Role | What it does |
 |---|---|
 | `ROLE=base` | serves the base model, generates baseline v2 (prompt fix) and the held-out set for `base`; needs no training |
-| `ROLE=adapter` | trains `sft-v1` (seed 42) and `sft-v1-seed2` (seed 43) on `sft-dataset:decontaminated-v1`, serves both adapters, generates sft-v1, seed 2 and their held-out sets |
+| `ROLE=adapter` | trains `$RUN` (seed 42) and `$RUN-seed2` (seed 43) on `sft-dataset:$DATASET`, serves both adapters, generates `$RUN`, seed 2 and their held-out sets |
+
+`RUN` defaults to `sft-v1` and `DATASET` to `decontaminated-v1`; `configs/eval/$RUN.yaml` and `$RUN-seed2.yaml` must exist.
+Baseline v2 (`ROLE=base`) is done and reused by later runs.
 
 ```bash
 tmux new -s q
-cd /workspace/on-prem-code-generation && ROLE=adapter bash scripts/sft_v1_queue.sh   # or ROLE=base
-grep -h progress outputs/sft-v1-queue/adapter/queue.log outputs/sft-v1-queue/adapter/logs/*.log | tail   # progress
+cd /workspace/on-prem-code-generation
+ROLE=adapter RUN=sft-v2 DATASET=decontaminated-v2 SAVE_STEPS=36 AUTODESTROY=1 bash scripts/sft_v1_queue.sh   # as sft-v2 was run
+grep -h progress outputs/sft-v2-queue/adapter/queue.log outputs/sft-v2-queue/adapter/logs/*.log | tail      # progress
 ```
 
 `DRY_RUN=1` prints every command; a re-run skips finished steps; `AUTODESTROY=1` destroys the instance once W&B
-holds every artifact of the role (use it after one run without it). Generations go to W&B; execute them locally (next section).
+holds every artifact of the role (use it after one run without it). Generations go to W&B; execute them locally ([Eval](#eval)).
 
 Serving a trained model is described in [Run the trained model](#run-the-trained-model).
 
@@ -144,9 +150,12 @@ The base model is not modified, so only the LoRA adapter is stored by us. vLLM s
 | Model | Where | Note |
 |---|---|---|
 | `Qwen/Qwen3.8-27B` | Hugging Face (`HF_TOKEN`) | unmodified base |
-| `sft-v0-adapter:candidate` | W&B artifact in `mllab-team/onprem-codegen` | first adapter, commit `9c4da41`; it did not beat the base under the frozen protocol ([docs/sft-v0.md](docs/sft-v0.md)) |
+| `sft-v2-adapter:candidate` | W&B artifact in `mllab-team/onprem-codegen` | best adapter, commit `fba4407`; COBOLEval sampled pass@1 0.274 (base 0.021), HumanEval-Python −0.041 ([docs/sft-v2.md](docs/sft-v2.md)) |
+| `sft-v1-adapter:candidate` | same | format defects in the training data, COBOLEval not above base ([docs/sft-v1.md](docs/sft-v1.md)) |
+| `sft-v0-adapter:candidate` | same | first adapter, commit `9c4da41`; it did not beat the base under the frozen protocol ([docs/sft-v0.md](docs/sft-v0.md)) |
 
-The Model Registry step (`make register`, alias `production`) is not written yet, so `candidate` is the only alias.
+No adapter meets every criterion yet, and the Model Registry step (`make register`, alias `production`) is not written,
+so `candidate` is the only alias.
 The adapter is not merged into the weights; merged FP8 / AWQ builds are planned.
 
 You need one 80 GB GPU, ≥ 200 GB disk, a W&B account with access to the team project, and `HF_TOKEN`.
@@ -154,7 +163,7 @@ You need one 80 GB GPU, ≥ 200 GB disk, a W&B account with access to the team p
 ```bash
 git clone <repo-url> && cd on-prem-code-generation
 export WANDB_API_KEY=... WANDB_ENTITY=mllab-team WANDB_PROJECT=onprem-codegen HF_TOKEN=...
-ADAPTER=sft-v0-adapter:candidate bash scripts/vast_serve.sh     # in tmux; installs vLLM in its own venv, fetches the adapter, serves
+ADAPTER=sft-v2-adapter:candidate bash scripts/vast_serve.sh     # in tmux; installs vLLM in its own venv, fetches the adapter, serves
 ```
 
 Then, from your machine:
@@ -191,10 +200,11 @@ make eval-execute ARGS="--generations eval-generations:baseline"    # locally, i
 Held-out CodeNet tasks (`data/splits/heldout_task_ids.json`, never trained on), for the "training works" criterion:
 
 ```bash
-for m in base:heldout-base cobol:heldout-sft-v1 cobol-seed2:heldout-sft-v1-seed2; do
-  wandb artifact get "$WANDB_ENTITY/$WANDB_PROJECT/eval-generations:${m#*:}" --root "outputs/eval/heldout/${m%%:*}"
+OUT=outputs/eval/heldout-v2
+for m in base:heldout-base cobol:heldout-sft-v2 cobol-seed2:heldout-sft-v2-seed2; do
+  wandb artifact get "$WANDB_ENTITY/$WANDB_PROJECT/eval-generations:${m#*:}" --root "$OUT/${m%%:*}"
 done
-PYTHONPATH=src python -m onprem_codegen.eval.heldout execute --models base cobol cobol-seed2   # report_<model>.json
+PYTHONPATH=src python -m onprem_codegen.eval.heldout execute --models base cobol cobol-seed2 --out $OUT   # report_<model>.json
 ```
 
 ## Local GPU box
