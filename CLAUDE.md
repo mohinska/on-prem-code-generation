@@ -4,7 +4,8 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 **Status:** in progress. `data/`, `train/sft.py`, `eval/`, `serve/` (adapter key fix, check) and `prompt.py` exist, with
 `requirements.txt`, Makefile, configs and tests. `sft-v0`, `sft-v1`, `sft-v2` done; `sft-v2` meets the COBOLEval criteria
-but not the HumanEval-Python guard ([docs/sft-v2.md](docs/sft-v2.md)). Gemma 4 31B comparison (same SFT) ready to run.
+but not the HumanEval-Python guard ([docs/sft-v2.md](docs/sft-v2.md)). Gemma 4 31B comparison (same SFT) done: verdict
+success, but not the CobolCodeBench guard ([docs/sft-gemma4.md](docs/sft-gemma4.md)).
 Not written yet: DPO/GRPO, W&B registry step (`make register`).
 
 ## Project goal

@@ -389,7 +389,7 @@ Execution locally in `eval-sandbox` (Docker Desktop, macOS) at commit `fba4407`:
 - The laptop slept during the seed-42 and held-out execution (≈ 07:00–10:45 UTC); the jobs paused and resumed. Held-out base reproduced the earlier execution exactly (same status counts as "held-out base execution"), and the COBOLEval sampled timeouts are 43 of 1805 compiled programs for seed 42 vs 37 of 1817 for seed 43 (run awake), so there is no sign of false timeouts. A false timeout could only lower seed 42.
 - `sft-v2-adapter:candidate` stays `candidate`: the Python guard is not met.
 
-### Gemma 4 31B comparison: setup (no runs yet)
+### Gemma 4 31B comparison: setup
 A second base model, to tell whether the sft-v2 gain is specific to Qwen3.8: `google/gemma-4-31B-it` (revision `842da3794eaa0b77d5f08bae87a17459d91ff475`, Apache 2.0, not gated), dense, 30.70B parameters in the text model, 60 layers (50 sliding-window, 10 full attention), vocabulary 262,144, multimodal (`Gemma4ForConditionalGeneration`). The instruct model, because Qwen3.8-27B is the post-trained one too.
 - Same as sft-v2: data `sft-dataset:decontaminated-v2` (v6), QLoRA 4-bit, r 16, alpha 32, lr 2e-4, 3 epochs, `save_steps` 36, seeds 42 and 43, `data.split_seed` 42, eval protocol and decoding (non-thinking temperature 0.7, top_p 0.8; Gemma's own defaults 1.0 / top_k 64 / 0.95 are not used), held-out split, criteria of [sft-v1-preregistration.md](sft-v1-preregistration.md). The generated rows of v6 come from Qwen3.8 rejection sampling, so for Gemma they are off-policy.
 - Baseline: Gemma has no frozen baseline, so `configs/eval/gemma4-baseline.yaml` runs every group (COBOLEval, CobolCodeBench completion and instruct, HumanEval-Python), non-thinking only. `eval.verdict` takes the same file as `--base` and `--base-frozen`.
@@ -397,7 +397,71 @@ A second base model, to tell whether the sft-v2 gain is specific to Qwen3.8: `go
 - LoRA: `configs/train/sft_gemma4.yaml`, `q/k/v/o_proj` + MLP. Full-attention layers have no `v_proj` (`attention_k_eq_v`), so 410 LoRA modules and 122,429,440 trainable parameters (Qwen: 116,727,808), counted on the real config. On the tiny checkpoint all adapter modules match the checkpoint names after `serve.adapter_keys`, as for Qwen.
 - Chat template: Gemma's generation prompt ends with an empty thought channel (`<|turn>model\n<|channel>thought\n<channel|>`) that the rendered model turn lacks, so the old `to_prompt_completion` failed its prefix check. Now the completion is the answer plus the template's end of turn (`<turn|>\n`); the prompt equals the one vLLM sends at eval time. Checked on all 641 v6 rows with both real tokenizers: Qwen output is byte-identical to before, Gemma completion = answer + `<turn|>\n`, one `<bos>`, max 2695 tokens (Qwen 2704). Both templates trim the user message and the answer; v6 answers are fenced, so trimming changes nothing.
 - Queue: `scripts/sft_v1_queue.sh` takes `MODEL`, `TRAIN_CONFIG`, `BASE_RUN`, `BASE_HELDOUT`; the defaults reproduce the sft-v1 / sft-v2 commands.
-- Not checked before the run: vLLM 0.32.0 serving Gemma 4 with LoRA. `serve.check` fails if an adapter changes nothing; it does not detect a LoRA on `k_proj` applied differently in the full-attention layers.
+- Serving: vLLM 0.32.0 serves Gemma 4 with both LoRA adapters (`serve.check` below). It does not check separately that a LoRA on `k_proj` is applied as in training in the full-attention layers (`attention_k_eq_v`).
+
+### sft-gemma4 (SFT on Gemma 4 31B) and its generations
+Two Vast instances, both 1× RTX PRO 6000 Blackwell Server Edition (98 GB, ≈ $1.74/h, host 120840, Texas), commit `c3c4847`, vLLM 0.32.0, started with `--env MODEL=google/gemma-4-31B-it`:
+- base (instance 62198959): `RUN=sft-gemma4 MODEL=google/gemma-4-31B-it BASE_RUN=gemma4-baseline BASE_HELDOUT=heldout-gemma4-base ROLE=base AUTODESTROY=1 bash scripts/sft_v1_queue.sh`.
+- adapter (instance 62198977): `RUN=sft-gemma4 MODEL=google/gemma-4-31B-it TRAIN_CONFIG=sft_gemma4 DATASET=decontaminated-v2 SAVE_STEPS=36 ROLE=adapter AUTODESTROY=1 bash scripts/sft_v1_queue.sh`.
+
+Settings of the setup entry above: 565 train / 76 eval rows, 0 dropped over-length, 108 steps, 122,429,440 trainable parameters, ≈ 16.3 s/step.
+
+| Run | Seed | Train runtime | Eval loss, step 36 / 72 / 108 | Eval token accuracy, step 108 | Train loss | Adapter |
+|---|---|---|---|---|---|---|
+| [sft-gemma4](https://wandb.ai/mllab-team/onprem-codegen/runs/sft-gemma4) | 42 | 1756 s (start 16:28 UTC) | 0.2416 / 0.1894 / 0.1857 | 0.9473 | 0.3181 | `sft-gemma4-adapter:candidate` (v0) |
+| [sft-gemma4-seed2](https://wandb.ai/mllab-team/onprem-codegen/runs/sft-gemma4-seed2) | 43 | 1771 s (start 16:59 UTC) | 0.2396 / 0.1906 / 0.1874 | 0.9463 | 0.3169 | `sft-gemma4-seed2-adapter:candidate` (v0) |
+
+- The eval rows are the same as sft-v2, but the tokenizer differs, so the losses are not directly comparable with Qwen (sft-v2: 0.1614 / 0.1605).
+- vLLM loads Gemma 4 in 58.99 GiB; warning `SM 12.x requires CUDA >= 12.9`, FlashInfer falls back to `TRITON_ATTN`. `check` passed at 16:36:47 UTC (base) and 17:35:18 UTC (adapter): max logprob difference vs base 8.04 (`cobol`) and 8.71 (`cobol-seed2`); Qwen sft-v1 had 5.01 / 5.35.
+- Generations (0 failed requests; 0 rows with Gemma's special tokens `<|channel>`, `<channel|>`, `<|turn>`, `<turn|>`):
+
+| Artifact `eval-generations:` | Version | Run | Size, time |
+|---|---|---|---|
+| `gemma4-baseline` | v15 | [w9jy19w6](https://wandb.ai/mllab-team/onprem-codegen/runs/w9jy19w6) | 9246 rows, all groups; 1 h 57 min (16:36–18:33 UTC) |
+| `heldout-gemma4-base` | v17 | [8ntze1x0](https://wandb.ai/mllab-team/onprem-codegen/runs/8ntze1x0) | 2526 rows; 3 h 5 min (18:33–21:38 UTC) |
+| `sft-gemma4` | v16 | [w5ll87j0](https://wandb.ai/mllab-team/onprem-codegen/runs/w5ll87j0) | 9246 rows, all groups; 1 h 57 min (17:35–19:32 UTC) |
+| `heldout-sft-gemma4` | v18 | [w6y8da0s](https://wandb.ai/mllab-team/onprem-codegen/runs/w6y8da0s) | 2526 rows; 3 h 17 min (19:32–22:49 UTC) |
+| `sft-gemma4-seed2` | v19 | [q8bm5tr4](https://wandb.ai/mllab-team/onprem-codegen/runs/q8bm5tr4) | 2920 rows, COBOLEval sampled only; 23 min |
+| `heldout-sft-gemma4-seed2` | v20 | [0vdygcph](https://wandb.ai/mllab-team/onprem-codegen/runs/0vdygcph) | 2526 rows; 3 h 41 min (23:13–02:54 UTC) |
+
+- Queues: base until 21:38 UTC (last artifact), adapter 16:28–02:54 UTC (training start to last artifact, ≈ 10 h 30 min, as sft-v2). With `AUTODESTROY=1` both instances destroyed themselves after `verify-wandb`; all eight artifacts `COMMITTED`.
+- Truncated (`finish_reason` length): gemma4-baseline 9 of 9246, sft-gemma4 22 of 9246 (COBOLEval 8, CobolCodeBench 14), seed 2 6 of 2920; held-out base 198, seed 42 331, seed 43 449 of 2526. Qwen sft-v2 had 281 and held-out 505 / 581.
+- The W&B owner of all runs is `dovhai-pn` (own W&B key, not the one from the Vast account environment variables).
+
+### sft-gemma4 verdict
+Execution locally in `eval-sandbox` (Docker Desktop, macOS) at commit `c3c4847`: [gemma4-baseline](https://wandb.ai/mllab-team/onprem-codegen/runs/6gsli9cp) (`eval-results:gemma4-baseline`, v12, 9246 rows, 5770 distinct programs, 23 min), [sft-gemma4](https://wandb.ai/mllab-team/onprem-codegen/runs/jgyh0k9s) (`eval-results:sft-gemma4`, v13, 9246 rows, 6242 programs, 36 min), [sft-gemma4-seed2](https://wandb.ai/mllab-team/onprem-codegen/runs/n1e7v4jw) (`eval-results:sft-gemma4-seed2`, v14, 2920 rows, 2746 programs, 23 min); held-out `heldout execute --models base cobol cobol-seed2 --out outputs/eval/heldout-gemma4` (421 tasks, 2526 rows per model). `eval.verdict --base` and `--base-frozen` both `gemma4-baseline`, criteria of [sft-v1-preregistration.md](sft-v1-preregistration.md), unchanged. Report: [sft-gemma4.md](sft-gemma4.md).
+
+**Вердикт: успіх** (both seeds agree on the main criterion and on training works; the CobolCodeBench guard is not met, and by the preregistration it is not part of the verdict rule).
+
+| Criterion (seed 42) | Met | Numbers |
+|---|---|---|
+| Main: COBOLEval sampled pass@1, compile rate | yes | 0.250 → 0.357, Δ +0.107 [+0.048, +0.163]; compile 0.388 → 0.751 |
+| Extra: COBOLEval pass@10, greedy pass@1 | yes | pass@10 0.478 → 0.638, Δ +0.161 [+0.090, +0.227]; greedy 0.249 → 0.379, Δ +0.130 [+0.053, +0.208] |
+| Guard Python | yes | HumanEval-Python sampled pass@1 0.980 → 0.970, Δ −0.010 [−0.025, +0.001] |
+| Guard CobolCodeBench completion | no | Δ pass@1 −0.078 [−0.157, −0.021]; truncation 0.000 → 0.012 |
+| Training works (held-out) | yes | sampled pass@1 0.055 → 0.109, Δ +0.054 [+0.032, +0.075] |
+| Seed 43: main | yes | 0.250 → 0.379, Δ +0.129 [+0.070, +0.186]; compile 0.388 → 0.757; pass@10 0.644, Δ +0.167 [+0.100, +0.230] |
+| Seed 43: training works | yes | 0.055 → 0.100, Δ +0.045 [+0.026, +0.065] |
+
+- Gemma base is much stronger than Qwen base on COBOLEval (sampled pass@1 0.250 vs 0.021, compile 0.388 vs 0.086) and on held-out (0.055 vs 0.003). After SFT, Gemma is above Qwen sft-v2 on COBOLEval (0.357 / 0.379 vs 0.274 / 0.282) and on held-out seed 42 (0.109 vs 0.075), but the gain over its own base is smaller (+0.107 vs +0.253).
+- Other groups, seed 42 vs base: CobolCodeBench completion greedy pass@1 0.087 → 0.007 (compile 0.486 → 0.138), sampled pass@10 0.098 → 0.022 (compile 0.497 → 0.108); CobolCodeBench instruct sampled pass@1 0.017 → 0.008, pass@10 0.080 → 0.066 (compile 0.409 → 0.420), greedy 0.000 → 0.000 (compile 0.377 → 0.543); HumanEval-Python greedy 0.978 → 0.974, sampled pass@10 0.991 → 0.991. Held-out greedy pass@1 0.048 → 0.116 (seed 42) and 0.107 (seed 43), sampled pass@5 0.095 → 0.216 and 0.195; compile rate sampled 0.210 → 0.379 / 0.386.
+- COBOLEval compile errors, first error per program (sampled): base 1783, `unexpected *` 444, `unexpected ., expecting Literal or program name` 252, undefined names 186; seed 42 721 and seed 43 703, COBOL usage as in Qwen sft-v2: arithmetic in `PERFORM VARYING ... FROM I + 1` 110 and `... TO` 54, subscripts (`requires one subscript` 69, `out of bounds` 39), unknown functions 46, undefined names 38, `PICTURE` on `COMP-2` 35.
+- `sft-gemma4-adapter:candidate` stays `candidate`: the CobolCodeBench guard is not met.
+
+### sft-gemma4 CobolCodeBench completion: answers without the program header
+727 of 810 compile errors (seed 42, sampled) are `PROGRAM-ID header missing`: the answer starts at `WORKING-STORAGE SECTION.`, the last line of the prompt, and the benchmark compiles the answer alone.
+
+| CobolCodeBench completion sampled (920 answers) | Whole program (`IDENTIFICATION DIVISION` first) | From `WORKING-STORAGE` only | No program |
+|---|---|---|---|
+| Qwen base (baseline-v2) | 459 | 361 | 100 |
+| Qwen sft-v2 | 753 | 1 | 166 |
+| Gemma base | 911 | 9 | 0 |
+| Gemma sft-gemma4 | 174 | 735 | 11 |
+
+- Per task (46 tasks × 20 answers): 33 tasks have no whole program, 4 tasks all 20. COBOLEval is not affected: 2913 of 2920 seed-42 answers are whole programs.
+- The 174 whole programs: 99 compile, 8 pass (file I/O, as for Qwen).
+- The prompt has two opposite instructions: the benchmark's comment "INSTRUCTIONS: Complete only the WORKING-STORAGE SECTION and PROCEDURE DIVISION" and our `IO_FILES` sentence "Write a complete GnuCOBOL program". The SFT data never shows this case: in `sft-dataset:v6` all 641 answers are whole programs, all 327 completion prompts end with "answer with the whole program" (`IO_COMPLETE`), the program prefix is 3 lines (median, max 11) and ends before `DATA DIVISION`, and no prompt has `FILE SECTION`, `WORKING-STORAGE` or "Complete only"; 24 of 641 answers use `SELECT` / `FD`.
+- Likely (not tested): Gemma tied "whole program" to the `IO_COMPLETE` sentence, so without it the adapter follows the benchmark comment; Qwen generalized to any program in the prompt. A fix belongs to the data: completion rows with the prefix up to `WORKING-STORAGE`, file I/O, and without `IO_COMPLETE` in part of them.
 
 ### still missing
-thinking baseline on CobolCodeBench (not run, see above), Gemma 4 comparison runs, CodeNet licence (C), reports.
+thinking baseline on CobolCodeBench (not run, see above), CodeNet licence (C), reports.

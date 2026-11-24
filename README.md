@@ -6,7 +6,8 @@ Every dataset, run, sweep and eval is tracked in Weights & Biases. Project brief
 > **Status:** in progress. Data, SFT, baseline eval and serving are done ([interim report](docs/interim-report.md)).
 > Three SFT runs: [sft-v0](docs/sft-v0.md), [sft-v1](docs/sft-v1.md), [sft-v2](docs/sft-v2.md). `sft-v2` raises COBOLEval
 > sampled pass@1 from 0.021 to 0.274 (seed 42) and 0.282 (seed 43), but HumanEval-Python drops by 0.041 (limit 0.02).
-> The same SFT on Gemma 4 31B (comparison) is ready to run: see [SFT run](#sft-run).
+> The same SFT on Gemma 4 31B ([sft-gemma4](docs/sft-gemma4.md)): COBOLEval 0.250 → 0.357 / 0.379, HumanEval-Python −0.010,
+> but CobolCodeBench completion falls (0.087 → 0.009): the adapter answers without the program header.
 > Preference tuning and the model registry are not written yet.
 
 ## Pipeline
@@ -142,7 +143,7 @@ grep -h progress outputs/sft-v2-queue/adapter/queue.log outputs/sft-v2-queue/ada
 `DRY_RUN=1` prints every command; a re-run skips finished steps; `AUTODESTROY=1` destroys the instance once W&B
 holds every artifact of the role (use it after one run without it). Generations go to W&B; execute them locally ([Eval](#eval)).
 
-**Gemma 4 comparison.** Same queue with another model; both roles are needed, because there is no Gemma baseline yet:
+**Gemma 4 comparison** ([docs/sft-gemma4.md](docs/sft-gemma4.md)). Same queue with another model; both roles are needed, because the Gemma baseline runs with the same protocol:
 
 ```bash
 # on the Vast instances (in tmux), not on the laptop; one role per instance
@@ -164,7 +165,9 @@ The base model is not modified, so only the LoRA adapter is stored by us. vLLM s
 | Model | Where | Note |
 |---|---|---|
 | `Qwen/Qwen3.8-27B` | Hugging Face (`HF_TOKEN`) | unmodified base |
-| `sft-v2-adapter:candidate` | W&B artifact in `mllab-team/onprem-codegen` | best adapter, commit `fba4407`; COBOLEval sampled pass@1 0.274 (base 0.021), HumanEval-Python −0.041 ([docs/sft-v2.md](docs/sft-v2.md)) |
+| `google/gemma-4-31B-it` | Hugging Face | unmodified comparison base |
+| `sft-v2-adapter:candidate` | W&B artifact in `mllab-team/onprem-codegen` | best Qwen adapter, commit `fba4407`; COBOLEval sampled pass@1 0.274 (base 0.021), HumanEval-Python −0.041 ([docs/sft-v2.md](docs/sft-v2.md)) |
+| `sft-gemma4-adapter:candidate` | same | Gemma 4 31B (`MODEL=google/gemma-4-31B-it`), commit `c3c4847`; COBOLEval sampled pass@1 0.357 (Gemma base 0.250), HumanEval-Python −0.010, CobolCodeBench completion 0.009 (base 0.087) ([docs/sft-gemma4.md](docs/sft-gemma4.md)) |
 | `sft-v1-adapter:candidate` | same | format defects in the training data, COBOLEval not above base ([docs/sft-v1.md](docs/sft-v1.md)) |
 | `sft-v0-adapter:candidate` | same | first adapter, commit `9c4da41`; it did not beat the base under the frozen protocol ([docs/sft-v0.md](docs/sft-v0.md)) |
 
