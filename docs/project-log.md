@@ -280,7 +280,7 @@ vLLM 0.32.0 (own venv, torch 2.13.0, `--max-num-seqs 256`), model `Qwen3_5ForCon
 ### sft-v1 verdict (plan 3.2)
 Execution in `eval-sandbox` at commit `c63c99b`: [baseline-v2](https://wandb.ai/mllab-team/onprem-codegen/runs/7idjdqq0) (`eval-results:baseline-v2`, v7, 4416 rows), [sft-v1](https://wandb.ai/mllab-team/onprem-codegen/runs/9iif0lhu) (`eval-results:sft-v1`, v8, 9246 rows), [sft-v1-seed2](https://wandb.ai/mllab-team/onprem-codegen/runs/jeodg2bm) (`eval-results:sft-v1-seed2`, v9, 2920 rows); held-out locally (2526 rows per model, `report_cobol.json`, `report_cobol-seed2.json`). No `</think>` in any program. Verdict by `eval.verdict` (commit `c29fdf9`). Report: [sft-v1.md](sft-v1.md).
 
-**Вердикт: частковий, нестабільний** (seed 42 and seed 43 differ on the main criterion).
+**Verdict: partial, unstable** (seed 42 and seed 43 differ on the main criterion).
 
 | Criterion (seed 42) | Met | Numbers |
 |---|---|---|
@@ -370,7 +370,7 @@ On `sft-dataset:v5` and the stored answers of baseline v2, sft-v1 and sft-v1-see
 ### sft-v2 verdict
 Execution locally in `eval-sandbox` (Docker Desktop, macOS) at commit `fba4407`: [sft-v2](https://wandb.ai/mllab-team/onprem-codegen/runs/ne6bnoeq) (`eval-results:sft-v2`, v10, 9246 rows), [sft-v2-seed2](https://wandb.ai/mllab-team/onprem-codegen/runs/846o8n4p) (`eval-results:sft-v2-seed2`, v11, 2920 rows); held-out `heldout execute --models base cobol cobol-seed2 --out outputs/eval/heldout-v2` (2526 rows per model). Baseline as for sft-v1: `eval-results:baseline-v2` (v7) and the frozen baseline (`baseline-final-non-thinking`, v1). Criteria of [sft-v1-preregistration.md](sft-v1-preregistration.md), unchanged; `eval.verdict` at `fba4407`. Report: [sft-v2.md](sft-v2.md).
 
-**Вердикт: успіх без guard Python** (both seeds agree on the main criterion).
+**Verdict: success without Python guard** (both seeds agree on the main criterion).
 
 | Criterion (seed 42) | Met | Numbers |
 |---|---|---|
@@ -431,7 +431,7 @@ Settings of the setup entry above: 565 train / 76 eval rows, 0 dropped over-leng
 ### sft-gemma4 verdict
 Execution locally in `eval-sandbox` (Docker Desktop, macOS) at commit `c3c4847`: [gemma4-baseline](https://wandb.ai/mllab-team/onprem-codegen/runs/6gsli9cp) (`eval-results:gemma4-baseline`, v12, 9246 rows, 5770 distinct programs, 23 min), [sft-gemma4](https://wandb.ai/mllab-team/onprem-codegen/runs/jgyh0k9s) (`eval-results:sft-gemma4`, v13, 9246 rows, 6242 programs, 36 min), [sft-gemma4-seed2](https://wandb.ai/mllab-team/onprem-codegen/runs/n1e7v4jw) (`eval-results:sft-gemma4-seed2`, v14, 2920 rows, 2746 programs, 23 min); held-out `heldout execute --models base cobol cobol-seed2 --out outputs/eval/heldout-gemma4` (421 tasks, 2526 rows per model). `eval.verdict --base` and `--base-frozen` both `gemma4-baseline`, criteria of [sft-v1-preregistration.md](sft-v1-preregistration.md), unchanged. Report: [sft-gemma4.md](sft-gemma4.md).
 
-**Вердикт: успіх** (both seeds agree on the main criterion and on training works; the CobolCodeBench guard is not met, and by the preregistration it is not part of the verdict rule).
+**Verdict: success** (both seeds agree on the main criterion and on training works; the CobolCodeBench guard is not met, and by the preregistration it is not part of the verdict rule).
 
 | Criterion (seed 42) | Met | Numbers |
 |---|---|---|

@@ -23,7 +23,8 @@ def run(cobol_sampled, compile_=None, cobol_greedy=None, python=0.95, ccb=0.0, c
     r = rows("coboleval", "sampled", cobol_sampled, compile_)
     r += rows("coboleval", "greedy", cobol_greedy if cobol_greedy is not None else cobol_sampled, compile_)
     r += rows("humaneval_python", "sampled", python) + rows("humaneval_python", "greedy", python)
-    r += rows("cobolcodebench", "sampled", ccb, truncated=ccb_trunc) + rows("cobolcodebench", "greedy", ccb, truncated=ccb_trunc)
+    r += rows("cobolcodebench", "sampled", ccb, truncated=ccb_trunc)
+    r += rows("cobolcodebench", "greedy", ccb, truncated=ccb_trunc)
     return r
 
 
@@ -41,19 +42,19 @@ def judge(adapted, held=heldout(0.05), seed2=None, held2=None):
 
 def test_success_when_main_python_guard_and_training_works():
     v = judge(run(0.6, compile_=0.8))
-    assert v["verdict"] == "успіх"
+    assert v["verdict"] == "success"
     assert all(c["met"] for c in v["criteria"])
 
 
 def test_partial_when_training_works_but_coboleval_does_not_improve():
     v = judge(run(0.1, compile_=0.2))
-    assert v["verdict"] == "частковий"
+    assert v["verdict"] == "partial"
     assert not v["by_name"]["main"]["met"] and v["by_name"]["training_works"]["met"]
 
 
 def test_failure_when_held_out_tasks_do_not_improve():
     v = judge(run(0.6, compile_=0.8), held=heldout(-0.02, mean=0.01))
-    assert v["verdict"] == "невдача"
+    assert v["verdict"] == "failure"
 
 
 def test_main_needs_a_higher_compile_rate_too():
@@ -64,10 +65,10 @@ def test_main_needs_a_higher_compile_rate_too():
 def test_python_guard_allows_two_points_and_no_more():
     base = verdict.merge_baseline(BASE_V2, run(0.0, compile_=0.0, python=0.9))    # HumanEval comes from the frozen run
     same = verdict.judge(base, run(0.6, compile_=0.8, python=0.9), heldout(0.05))
-    assert same["by_name"]["python_guard"]["met"] and same["verdict"] == "успіх"
+    assert same["by_name"]["python_guard"]["met"] and same["verdict"] == "success"
     worse = verdict.judge(base, run(0.6, compile_=0.8, python=0.8), heldout(0.05))   # -0.1
     assert not worse["by_name"]["python_guard"]["met"]
-    assert worse["verdict"] == "успіх без guard Python"
+    assert worse["verdict"] == "success without Python guard"
 
 
 def test_cobolcodebench_guard_fails_on_more_truncation():
@@ -86,7 +87,7 @@ def test_merge_takes_v2_groups_and_fills_the_rest_from_the_frozen_baseline():
 def test_unstable_when_the_two_seeds_disagree():
     v = judge(run(0.6, compile_=0.8), seed2=[r for r in run(0.1, compile_=0.2) if r["benchmark"] == "coboleval"],
               held2=heldout(0.05))
-    assert v["unstable"] and "нестабільний" in verdict.render(v)
+    assert v["unstable"] and "unstable" in verdict.render(v)
 
 
 def test_cli_writes_markdown_and_json(tmp_path):
@@ -99,5 +100,5 @@ def test_cli_writes_markdown_and_json(tmp_path):
     verdict.main(["--base", str(dump("v2.jsonl", BASE_V2)), "--base-frozen", str(dump("b.jsonl", BASE_FROZEN)),
                   "--adapted", str(dump("a.jsonl", run(0.6, compile_=0.8))), "--heldout", str(tmp_path / "heldout"),
                   "--out", str(tmp_path / "verdict.md")])
-    assert "успіх" in (tmp_path / "verdict.md").read_text()
-    assert json.loads((tmp_path / "verdict.json").read_text())["verdict"] == "успіх"
+    assert "success" in (tmp_path / "verdict.md").read_text()
+    assert json.loads((tmp_path / "verdict.json").read_text())["verdict"] == "success"

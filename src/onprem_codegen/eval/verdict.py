@@ -57,7 +57,8 @@ def _cmp(base, adapted, g, k=1):
 def _main(base, adapted) -> tuple[bool, str]:
     m = _cmp(base, adapted, COBOL_S)
     ok = m["delta"] > 0 and m["ci"][0] > 0 and m["compile"][1] > m["compile"][0]
-    return ok, (f"pass@1 {m['base']:.3f} → {m['adapted']:.3f}, Δ {m['delta']:+.3f} [{m['ci'][0]:+.3f}, {m['ci'][1]:+.3f}]; "
+    return ok, (f"pass@1 {m['base']:.3f} → {m['adapted']:.3f}, "
+                f"Δ {m['delta']:+.3f} [{m['ci'][0]:+.3f}, {m['ci'][1]:+.3f}]; "
                 f"compile {m['compile'][0]:.3f} → {m['compile'][1]:.3f}")
 
 
@@ -75,59 +76,62 @@ def judge(base_rows, adapted_rows, held=None, seed2_rows=None, held2=None) -> di
     def add(name, title, met, detail):
         crit.append({"name": name, "title": title, "met": bool(met), "detail": detail})
 
-    add("main", "Основний: COBOLEval sampled pass@1 вищий (нижня межа CI > 0) і вищий compile rate", *_main(base, adapted))
+    add("main", "Main: COBOLEval sampled pass@1 higher (CI lower bound > 0) and higher compile rate",
+        *_main(base, adapted))
     p10 = _cmp(base, adapted, COBOL_S, 10)
     g1 = _cmp(base, adapted, COBOL_G)
-    add("extra", "Додатковий: COBOLEval pass@10 вищий (нижня межа > 0), greedy pass@1 не нижчий",
+    add("extra", "Extra: COBOLEval pass@10 higher (lower bound > 0), greedy pass@1 not lower",
         p10["delta"] > 0 and p10["ci"][0] > 0 and g1["delta"] >= 0,
         f"pass@10 Δ {p10['delta']:+.3f} [{p10['ci'][0]:+.3f}, {p10['ci'][1]:+.3f}]; greedy pass@1 Δ {g1['delta']:+.3f}")
     py = _cmp(base, adapted, PY_S)
-    add("python_guard", f"Guard Python: HumanEval-Python sampled pass@1 падає не більше ніж на {PY_MAX_DROP}",
+    add("python_guard", f"Guard Python: HumanEval-Python sampled pass@1 drops by at most {PY_MAX_DROP}",
         -py["delta"] <= PY_MAX_DROP, f"pass@1 {py['base']:.3f} → {py['adapted']:.3f} (Δ {py['delta']:+.3f})")
     ccb = _cmp(base, adapted, CCB_S)
     rise = ccb["trunc"][1] - ccb["trunc"][0]
-    add("ccb_guard", "Guard CobolCodeBench completion: pass@1 не нижчий за CI, обрізання не більше ніж +10 пунктів",
+    add("ccb_guard", "Guard CobolCodeBench completion: pass@1 not lower by CI, truncation rises by at most 10 points",
         ccb["ci"][1] >= 0 and rise <= CCB_MAX_TRUNC_RISE,
-        f"Δ pass@1 {ccb['delta']:+.3f} [{ccb['ci'][0]:+.3f}, {ccb['ci'][1]:+.3f}]; обрізання "
+        f"Δ pass@1 {ccb['delta']:+.3f} [{ccb['ci'][0]:+.3f}, {ccb['ci'][1]:+.3f}]; truncation "
         f"{ccb['trunc'][0]:.3f} → {ccb['trunc'][1]:.3f} ({rise:+.3f})")
-    add("training_works", "«Навчання працює»: утримані задачі, pass@1 вищий за базу (нижня межа > 0)", *_works(held))
+    add("training_works", "Training works: held-out tasks, pass@1 above base (lower bound > 0)", *_works(held))
 
     by = {c["name"]: c for c in crit}
     main, py_ok, works = by["main"]["met"], by["python_guard"]["met"], by["training_works"]["met"]
     if not works:
-        v = "невдача"
+        v = "failure"
     elif main and py_ok:
-        v = "успіх"
+        v = "success"
     elif main:
-        v = "успіх без guard Python"   # not one of the three preregistered verdicts: slice C (Python) applies
+        v = "success without Python guard"   # not one of the three preregistered verdicts: slice C (Python) applies
     else:
-        v = "частковий"
+        v = "partial"
 
     seed2 = None
     if seed2_rows is not None:
         s_main = _main(base, _by_group(seed2_rows))
         s_works = _works(held2)
-        seed2 = {"main": {"met": s_main[0], "detail": s_main[1]}, "training_works": {"met": s_works[0], "detail": s_works[1]}}
+        seed2 = {"main": {"met": s_main[0], "detail": s_main[1]},
+                 "training_works": {"met": s_works[0], "detail": s_works[1]}}
     unstable = bool(seed2) and (seed2["main"]["met"] != main or seed2["training_works"]["met"] != works)
     return {"verdict": v, "criteria": crit, "by_name": by, "seed2": seed2, "unstable": unstable}
 
 
 def render(v: dict) -> str:
-    lines = [f"**Вердикт: {v['verdict']}**" + (" — **нестабільний результат** (seed 42 і seed 43 розходяться)"
+    lines = [f"**Verdict: {v['verdict']}**" + (" — **unstable result** (seed 42 and seed 43 differ)"
                                               if v["unstable"] else ""), "",
-             "| Критерій | Виконано | Числа |", "|---|---|---|"]
-    lines += [f"| {c['title']} | {'так' if c['met'] else 'ні'} | {c['detail']} |" for c in v["criteria"]]
+             "| Criterion | Met | Numbers |", "|---|---|---|"]
+    lines += [f"| {c['title']} | {'yes' if c['met'] else 'no'} | {c['detail']} |" for c in v["criteria"]]
     if v["seed2"]:
-        lines += ["", "| Seed 43 (розкид) | Виконано | Числа |", "|---|---|---|"]
-        lines += [f"| {n} | {'так' if c['met'] else 'ні'} | {c['detail']} |" for n, c in v["seed2"].items()]
-    lines += ["", "Критерії: `docs/sft-v1-preregistration.md`; гарди й утримані задачі читаються на sampled."]
+        lines += ["", "| Seed 43 (spread) | Met | Numbers |", "|---|---|---|"]
+        lines += [f"| {n} | {'yes' if c['met'] else 'no'} | {c['detail']} |" for n, c in v["seed2"].items()]
+    lines += ["", "Criteria: `docs/sft-v1-preregistration.md`; guards and held-out tasks are read on sampled decoding."]
     return "\n".join(lines) + "\n"
 
 
 def main(argv: list[str] | None = None) -> None:
     ap = argparse.ArgumentParser(description="sft-v1 verdict by the preregistered criteria.")
     ap.add_argument("--base", type=Path, required=True, help="baseline v2 results.jsonl")
-    ap.add_argument("--base-frozen", type=Path, required=True, help="frozen baseline results.jsonl (HumanEval, CCB instruct)")
+    ap.add_argument("--base-frozen", type=Path, required=True,
+                    help="frozen baseline results.jsonl (HumanEval, CCB instruct)")
     ap.add_argument("--adapted", type=Path, required=True, help="sft-v1 results.jsonl")
     ap.add_argument("--seed2", type=Path, help="sft-v1-seed2 results.jsonl")
     ap.add_argument("--heldout", type=Path, default=Path("outputs/eval/heldout"), help="dir with report_<model>.json")
@@ -140,8 +144,8 @@ def main(argv: list[str] | None = None) -> None:
     md = render(v)
     a.out.parent.mkdir(parents=True, exist_ok=True)
     a.out.write_text(md, encoding="utf-8")
-    a.out.with_name("verdict.json").write_text(json.dumps({k: v[k] for k in ("verdict", "criteria", "seed2", "unstable")},
-                                                          indent=1, ensure_ascii=False), encoding="utf-8")
+    summary = {k: v[k] for k in ("verdict", "criteria", "seed2", "unstable")}
+    a.out.with_name("verdict.json").write_text(json.dumps(summary, indent=1, ensure_ascii=False), encoding="utf-8")
     print(md)
 
 
