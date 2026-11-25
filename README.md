@@ -71,8 +71,10 @@ Keep this section up to date whenever you add, move or remove a top-level direct
 │   └── serve/               # adapter key fix for vLLM, server check
 ├── tests/
 ├── tasks/                   # local plans (gitignored)
+├── .claude/rules/           # Claude Code rules by topic (workflow, W&B, data, Vast, code style, writing)
 ├── docker-compose.yml       # local GPU box only
 ├── Makefile                 # entry points
+├── ruff.toml                # lint config (`make lint`), no auto-formatting
 └── .env.example
 ```
 

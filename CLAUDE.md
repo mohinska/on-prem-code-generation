@@ -53,29 +53,6 @@ W&B dashboards + model registry, base-vs-adapted evaluation report, live before/
    (catastrophic forgetting). Per-sample generations logged as W&B Tables.
 7. **Register** — W&B Model Registry, aliases `candidate` → `production`.
 
-## W&B conventions
-- Data artifact names/types are pinned in [configs/data/wandb.yaml](configs/data/wandb.yaml): `raw-corpus` (dataset, all sources +
-  `manifest.parquet`, before filters), `clean-corpus` (dataset, after filters/dedup/decontam + stats),
-  `decontam-report` (report, optional, what was removed and why).
-- Every stage consumes its inputs **from W&B artifacts** and logs outputs as new artifact versions,
-  so lineage from raw corpus to deployed model is automatic.
-- Every run logs: git commit, config, input/output artifacts. GPU comes from W&B system metadata; note the vLLM version in the project log.
-- Sweeps are small: learning rate × LoRA rank, few configs, short runs.
-
-## Vast.ai rules
-- **Every stage must be restartable on a fresh instance.** Nothing important lives only on instance disk.
-- Checkpoint every N steps with resume support; interruptible instances only for resumable jobs.
-- Request ≥ 200 GB disk (weights alone ≈ 54 GB bf16). Prefer datacenter / Secure Cloud hosts.
-- API keys come from env vars — never baked into images.
-- Destroy instances when runs finish.
-
-## Serving
-- vLLM (recent version supporting this architecture) with OpenAI-compatible API; SGLang as alternative.
-- bf16 + LoRA adapter on 1× 80 GB (live base ↔ adapted toggle for the demo);
-  merged FP8 on 48 GB or merged AWQ 4-bit on a 24 GB card for cheaper serving.
-- Access via SSH tunnel (`ssh -L 8000:localhost:8000 …`), not a public port.
-- Demo client: OpenCode pointed at the local endpoint.
-
 ## Repo layout
 ```
 benchmarks/              # eval benchmarks, downloaded at pinned commits (gitignored), never trained on
@@ -87,11 +64,13 @@ scripts/                 # Vast.ai bootstrap, serving, SFT queue (sft-v1, sft-v2
 src/onprem_codegen/      # data/ train/ eval/ serve/ — run as `python -m onprem_codegen.<stage>...`
                          # prompt.py: build_prompt, shared by SFT data and eval
 tests/
+.claude/rules/           # rules split by topic, see below
 docker-compose.yml       # local GPU box only; Vast instances can't run Docker
 Makefile                 # pipeline entry points
 requirements.txt
+ruff.toml                # lint config (`make lint`), no auto-formatting
 ```
-Entry points: `make data`, `make sft-data`, `make decontam` (alias `decontaminated` on sft-dataset), `make train`, `make benchmarks` (log benchmark-* artifacts), `make eval` (+ `eval-generate`, `eval-execute`). `make register` is planned.
+Entry points: `make data`, `make sft-data`, `make decontam` (alias `decontaminated` on sft-dataset), `make train`, `make benchmarks` (log benchmark-* artifacts), `make eval` (+ `eval-generate`, `eval-execute`), `make test`, `make lint`. `make register` is planned.
 
 ## Commands (local GPU box)
 ```bash
@@ -100,33 +79,12 @@ docker compose run --rm train python -m onprem_codegen.train.sft ...
 docker compose up serve                                # 127.0.0.1:8000; models "base" and "cobol" (adapter)
 docker compose run --rm eval-sandbox cobc -x prog.cbl  # compile/run generated COBOL in isolation
 ```
-On Vast.ai, see README "Running on Vast.ai" (images pushed to a registry, no compose).
 
-## Data rules
-- Each manifest declares `role`: `train`, `tasks_and_train`,
-  or `eval_only`. Never train on `eval_only` sources (`benchmarks.yaml`, `mainframe_instruct.yaml`).
-- Pin `source.revision` and confirm `license.verified` at download time (currently TODOs).
-- Downloads go to `data/raw/` scratch; the real output is a W&B artifact.
-- SFT data excludes `.cpy` copybooks (`ext == ".cpy"` in the manifest); they stay in `clean-corpus` as dependencies.
-- Dataset plan and source priority (start with real COBOL): [docs/dataset.md](docs/dataset.md).
-- Execute generated code only inside the `eval-sandbox` container (no network, read-only, resource-capped).
-  Vast instances have no Docker, so execution-based eval runs locally for now.
-
-**Keep README.md in sync:** whenever you add, move or remove a top-level directory or module,
-update the "Project structure" section of README.md (and this layout) in the same change.
-The same goes for "Key decisions" when a decision above changes.
-
-## Project log
-- Everything we do is documented in [docs/project-log.md](docs/project-log.md): decisions, code changes, runs,
-  sweeps, evals, problems and **every result with exact numbers**. It is the source for the intermediate report,
-  the final report and the paper.
-- The log describes the project as it is now; new runs and results are added as entries under "Results" (what was run,
-  config, exact numbers, W&B run/artifact link, commit hash). No dates in titles, and no "removed/dropped X" entries:
-  update the description instead. Failed runs and negative results go in too.
-
-## Commit messages
-- One line: `type(scope): message` (e.g. `feat(data): add MinHash dedup`). No body, no Co-Authored-By trailer.
-- When asked for a commit message, reply with ready-to-run commands: `git add <files>`, `git commit -m "..."`, `git push`.
-
-## Communication style
-- Keep explanations simple and answers concise. No extra info beyond what was asked.
+## Rules
+Split by topic in `.claude/rules/`; files with `paths:` load only when working on matching files.
+- [workflow.md](.claude/rules/workflow.md) — communication, stack, seeds, commits, project log, README sync (always)
+- [wandb.md](.claude/rules/wandb.md) — W&B conventions (always)
+- [data.md](.claude/rules/data.md) — data sources, no leakage, fixed comparison protocol, sandbox execution
+- [vast-serving.md](.claude/rules/vast-serving.md) — Vast.ai rules and serving
+- [code-style.md](.claude/rules/code-style.md) — code style, lint
+- [writing.md](.claude/rules/writing.md) — project log and report writing style
