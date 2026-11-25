@@ -64,7 +64,8 @@ def test_build_v1_lite_drops_heldout_rewrites_and_rechecks():
 
 def test_program_that_never_ends_explicitly_is_dropped_without_running():
     ran = []
-    out, stats = build_v1_lite([row("t/1", "           DISPLAY 'X'.")], heldout=set(), passes=lambda r, p: ran.append(p) or True)
+    out, stats = build_v1_lite([row("t/1", "           DISPLAY 'X'.")], heldout=set(),
+                               passes=lambda r, p: ran.append(p) or True)
     assert out == [] and ran == [] and stats["no_goback"] == 1 and stats["kept"] == 0
 
 

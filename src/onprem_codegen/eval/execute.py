@@ -100,9 +100,11 @@ def _build_job(code: str, tests: Tests, lang: Lang, timeout_s: float) -> dict:
             raise ValueError("python tests must be a str (self-contained test program)")
         kind, payload = "python", tests
     else:
-        kinds = {next((v for k, v in KINDS.items() if k in t), None) for t in tests} if isinstance(tests, list) else {None}
+        kinds = ({next((v for k, v in KINDS.items() if k in t), None) for t in tests}
+                 if isinstance(tests, list) else {None})
         if len(kinds) > 1 or None in kinds:
-            raise ValueError("cobol tests must be a list of one test type: stdin, caller or file_io (or [] to only compile)")
+            raise ValueError("cobol tests must be a list of one test type: stdin, caller or file_io "
+                             "(or [] to only compile)")
         kind = kinds.pop() if kinds else "compile"   # contracts.md: no tests means compile only (cobc -fsyntax-only)
         payload = tests
     return {"kind": kind, "code": code, "tests": payload,

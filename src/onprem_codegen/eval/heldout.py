@@ -101,7 +101,8 @@ def execute_all(tasks: dict, gen_path: Path, out: Path, executor=sandbox_executo
             jobs.setdefault((g["task_id"], program), []).append({**g, "program": program})
     with open(path, "a", encoding="utf-8") as f, ThreadPoolExecutor(workers) as pool:
         f.write("".join(json.dumps(r, ensure_ascii=False) + "\n" for r in rows))
-        futures = {pool.submit(executor, program, all_tests(tasks[tid])): group for (tid, program), group in jobs.items()}
+        futures = {pool.submit(executor, program, all_tests(tasks[tid])): group
+                   for (tid, program), group in jobs.items()}
         for fut in as_completed(futures):
             f.write("".join(json.dumps({**g, **fut.result()}, ensure_ascii=False) + "\n" for g in futures[fut]))
             f.flush()

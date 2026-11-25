@@ -47,7 +47,8 @@ def main(src: str, dst: str) -> None:
     n, rules = 0, {"indent": 0, "prefix": 0, None: 0}
     with open(dst, "w", encoding="utf-8") as f:
         for r in read_jsonl(src):
-            if not (r["benchmark"] == "coboleval" or (r["benchmark"] == "cobolcodebench" and r["task_mode"] == "completion")):
+            if not (r["benchmark"] == "coboleval"
+                    or (r["benchmark"] == "cobolcodebench" and r["task_mode"] == "completion")):
                 continue
             program, rule = repair(r.get("program"), r["prompt"])
             rules[rule] += 1
@@ -55,7 +56,8 @@ def main(src: str, dst: str) -> None:
             gen = r["generation"] if program is None else f"```cobol\n{program}```"
             keep = ("task_id", "benchmark", "task_mode", "mode", "decoding", "run", "sample_idx", "prompt",
                     "reasoning", "finish_reason", "completion_tokens", "served_model", "seed")
-            f.write(json.dumps({**{k: r[k] for k in keep}, "generation": gen, "repair": rule}, ensure_ascii=False) + "\n")
+            f.write(json.dumps({**{k: r[k] for k in keep}, "generation": gen, "repair": rule},
+                               ensure_ascii=False) + "\n")
     print(f"{n} rows, repaired: indent {rules['indent']}, prefix {rules['prefix']}, unchanged {rules[None]}")
 
 

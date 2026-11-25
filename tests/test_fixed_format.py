@@ -1,6 +1,7 @@
 from onprem_codegen.data.fixed_format import is_free, to_fixed
 
-FIXED = "       IDENTIFICATION DIVISION.\n       PROGRAM-ID. T.\n      * comment\n       PROCEDURE DIVISION.\n           GOBACK.\n"
+FIXED = ("       IDENTIFICATION DIVISION.\n       PROGRAM-ID. T.\n      * comment\n"
+         "       PROCEDURE DIVISION.\n           GOBACK.\n")
 FREE = "IDENTIFICATION DIVISION.\nPROGRAM-ID. T.\n*> comment\nPROCEDURE DIVISION.\n  DISPLAY 'HI'.\n  GOBACK.\n"
 MIXED = "IDENTIFICATION DIVISION.\n       PROGRAM-ID. T.\n       PROCEDURE DIVISION.\n           GOBACK.\n"
 

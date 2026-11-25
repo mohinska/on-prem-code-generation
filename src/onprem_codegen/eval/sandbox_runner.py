@@ -244,7 +244,8 @@ def kind_compile(job: dict, workdir: Path) -> dict:
     return {"compiled": not _compile_failed(c), "compile_stderr": c["stderr"], "tests": []}
 
 
-KINDS = {"compile": kind_compile, "stdin": kind_stdin, "caller": kind_caller, "file_io": kind_file_io, "python": kind_python}
+KINDS = {"compile": kind_compile, "stdin": kind_stdin, "caller": kind_caller, "file_io": kind_file_io,
+         "python": kind_python}
 
 
 def main(job_path: str) -> None:

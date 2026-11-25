@@ -10,7 +10,8 @@ DONE = "base_model.model.model.language_model.layers.1.self_attn.q_proj.lora_B.w
 
 
 def _adapter(tmp_path, keys):
-    save_file({k: torch.full((2, 2), float(i)) for i, k in enumerate(keys)}, str(tmp_path / "adapter_model.safetensors"))
+    tensors = {k: torch.full((2, 2), float(i)) for i, k in enumerate(keys)}
+    save_file(tensors, str(tmp_path / "adapter_model.safetensors"))
     return tmp_path
 
 

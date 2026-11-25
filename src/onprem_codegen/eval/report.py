@@ -53,7 +53,9 @@ def render(base: dict, adapted: dict, base_name: str = "base", adapted_name: str
 def _read_rows(metrics_path: Path) -> list[dict]:
     """results.jsonl next to metrics.json (per-sample rows), [] if missing."""
     p = metrics_path.parent / "results.jsonl"
-    return [json.loads(line) for line in p.read_text(encoding="utf-8").splitlines() if line.strip()] if p.is_file() else []
+    if not p.is_file():
+        return []
+    return [json.loads(line) for line in p.read_text(encoding="utf-8").splitlines() if line.strip()]
 
 
 def _by_group(rows: list[dict]) -> dict[str, list[dict]]:
@@ -95,7 +97,8 @@ def main() -> None:
     ap.add_argument("--out", type=Path, help="markdown file (default: print)")
     a = ap.parse_args()
     if a.ci_of:
-        md = render_ci([json.loads(l) for p in a.ci_of for l in p.read_text(encoding="utf-8").splitlines() if l.strip()])
+        md = render_ci([json.loads(l) for p in a.ci_of
+                        for l in p.read_text(encoding="utf-8").splitlines() if l.strip()])
     elif a.base and a.adapted:
         base_rows, adapted_rows = _read_rows(a.base), _read_rows(a.adapted)
         ci = pass1_cis(base_rows, adapted_rows) if base_rows and adapted_rows else None   # needs results.jsonl of both

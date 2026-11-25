@@ -4,9 +4,9 @@ Python tests use the `local` backend with trusted inline snippets, so they need 
 nor cobc. COBOL execution tests use a native cobc if there is one, else the eval-sandbox docker
 image, and are skipped when neither is available.
 """
-import sys
 import shutil
 import subprocess
+import sys
 
 import pytest
 

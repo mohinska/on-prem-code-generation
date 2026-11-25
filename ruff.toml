@@ -1,0 +1,7 @@
+# Lint only, no auto-formatting: line length, import order, pyflakes (unused imports/variables, undefined names).
+line-length = 120
+target-version = "py312"
+extend-exclude = ["benchmarks", "data", "outputs"]
+
+[lint]
+select = ["E501", "F", "I"]

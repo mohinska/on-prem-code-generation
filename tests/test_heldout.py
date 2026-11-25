@@ -26,7 +26,8 @@ def _server(log):
             tid = body["messages"][0]["content"].split("\n")[0].split()[1]
             ok = body["model"] == "cobol" or tid == "0"
             text = f"```cobol\n{'PASS' if ok else 'FAIL'} {tid}\n```"
-            choices = [{"index": i, "finish_reason": "stop", "message": {"content": text}} for i in range(body.get("n", 1))]
+            choices = [{"index": i, "finish_reason": "stop", "message": {"content": text}}
+                       for i in range(body.get("n", 1))]
             out = json.dumps({"choices": choices}).encode()
             self.send_response(200)
             self.send_header("Content-Type", "application/json")
@@ -71,7 +72,8 @@ def test_generate_requests_follow_the_protocol_without_hints(tasks, server, tmp_
     by = {(b["messages"][0]["content"], b.get("n", 1)): b for b in log}
     for t in tasks.values():
         prompt = build_prompt(t["prompt"])
-        assert by[(prompt, 1)]["temperature"] == 0 and by[(prompt, 5)]["temperature"] > 0   # exactly build_prompt: no hints
+        # exactly build_prompt: no hints
+        assert by[(prompt, 1)]["temperature"] == 0 and by[(prompt, 5)]["temperature"] > 0
         assert by[(prompt, 5)]["chat_template_kwargs"] == {"enable_thinking": False}
         assert by[(prompt, 1)]["model"] == "cobol"
     rows = read_jsonl(path)
@@ -84,7 +86,8 @@ def test_generate_resumes_after_an_interruption(tasks, server, tmp_path):
     url, log = server
     path = heldout.generate(tasks, "base", url, tmp_path)
     full = read_jsonl(path)
-    keep = [r for r in full if not (r["task_id"] == "codenet/p2" or r["decoding"] == "sampled" and r["task_id"] == "codenet/p1")]
+    keep = [r for r in full
+            if not (r["task_id"] == "codenet/p2" or r["decoding"] == "sampled" and r["task_id"] == "codenet/p1")]
     path.write_text("".join(json.dumps(r) + "\n" for r in keep), encoding="utf-8")
     log.clear()
     heldout.generate(tasks, "base", url, tmp_path)
@@ -145,6 +148,7 @@ def test_execute_cli_writes_one_report_per_adapter(tasks, server, tmp_path, monk
                             tmp_path / m, fake_executor)
     monkeypatch.setattr(heldout, "load_tasks", lambda *a: tasks)
     monkeypatch.setattr(heldout, "sandbox_executor", fake_executor)
-    monkeypatch.setattr("sys.argv", ["heldout", "execute", "--models", "base", "cobol", "cobol-seed2", "--out", str(tmp_path)])
+    argv = ["heldout", "execute", "--models", "base", "cobol", "cobol-seed2", "--out", str(tmp_path)]
+    monkeypatch.setattr("sys.argv", argv)
     heldout.main()
     assert (tmp_path / "report_cobol.json").exists() and (tmp_path / "report_cobol-seed2.json").exists()

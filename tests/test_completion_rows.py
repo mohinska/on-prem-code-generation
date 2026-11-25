@@ -29,7 +29,8 @@ def test_round_trip_indent_and_gobacks():
     assert comp
     for r in comp:
         prefix, rest = r["prompt"].split("\n\n", 1)
-        assert prefix.startswith("       IDENTIFICATION DIVISION.\n")  # program first, as in the benchmarks; indent kept
+        # program first, as in the benchmarks; indent kept
+        assert prefix.startswith("       IDENTIFICATION DIVISION.\n")
         assert "DATA DIVISION" not in prefix
         body = r["completion"]
         answer = body.removeprefix("```cobol\n").removesuffix("```")
@@ -84,6 +85,7 @@ def test_data_division_with_padded_spaces_or_lower_case_is_split_too():
 
 def test_cli_writes_rows_and_stats_and_fails_on_benchmark_hit(tmp_path, monkeypatch):
     import json
+
     from onprem_codegen.data import completion_rows
 
     src = tmp_path / "in.jsonl"

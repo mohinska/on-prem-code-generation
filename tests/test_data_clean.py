@@ -5,16 +5,16 @@ from pathlib import Path
 
 import pytest
 
-from onprem_codegen.data import clean, collect
 from onprem_codegen import utils
-from onprem_codegen.eval.benchmarks import Task
-from onprem_codegen.eval.execute import ExecResult, Status
+from onprem_codegen.data import clean, collect
 from onprem_codegen.data import decontaminate as decon
 from onprem_codegen.data.decontaminate import decontaminate
 from onprem_codegen.data.dedup import exact_dedup, near_dedup
 from onprem_codegen.data.filters import apply_filters
-from onprem_codegen.data.xcobol import load_xcobol
 from onprem_codegen.data.schema import ManifestRow, raw_record, read_manifest, write_manifest
+from onprem_codegen.data.xcobol import load_xcobol
+from onprem_codegen.eval.benchmarks import Task
+from onprem_codegen.eval.execute import ExecResult, Status
 
 ROOT = Path(__file__).resolve().parents[1]
 FILTERS = {"min_lines": 5, "max_lines": 50, "max_nonalnum_ratio": 0.5}
@@ -82,7 +82,8 @@ def test_exact_dedup_keeps_distinct_files():
 def test_near_dedup_drops_near_copy_across_sources_and_keeps_distinct():
     base = _prog("BASE", 40)
     near = base + "           DISPLAY WS-EXTRA.\n"  # one extra line: Jaccard well above 0.8
-    rows = [_row(base, "stack_v1_cobol", "s.cbl"), _row(near, "xcobol", "x.cbl"), _row(_prog("OTHER", 40), "xcobol", "o.cbl")]
+    rows = [_row(base, "stack_v1_cobol", "s.cbl"), _row(near, "xcobol", "x.cbl"),
+            _row(_prog("OTHER", 40), "xcobol", "o.cbl")]
     contents = {r.id: c for r, c in zip(rows, [base, near, _prog("OTHER", 40)])}
     r = _by_path(near_dedup(rows, contents, DEDUP))
     assert r["s.cbl"].kept and r["o.cbl"].kept
@@ -140,7 +141,8 @@ def test_decontaminate_catches_canonical_solution_of_an_instruct_task_in_another
 
 def test_decontaminate_checks_reference_files_of_file_io_tasks(bench):
     expected = "\n".join(f"ROW {i} TOTAL {i * 7}" for i in range(10))
-    cfg = bench(fake=[_task("p " * 20, tests=[{"input_files": {"in": "x"}, "expected_outputs": {"out.txt": expected}}])])
+    io_test = {"input_files": {"in": "x"}, "expected_outputs": {"out.txt": expected}}
+    cfg = bench(fake=[_task("p " * 20, tests=[io_test])])
     row = _row(expected)
     [out], report = decontaminate([row], {row.id: expected}, cfg)
     assert out.decontam_hit and report[0]["part"] == "expected_output"
@@ -278,7 +280,8 @@ def _collect(tmp_path, monkeypatch, *args):
     monkeypatch.chdir(tmp_path)
     monkeypatch.setattr(collect, "OUT", tmp_path / "out")
     (tmp_path / "out").mkdir()
-    for name, src in (("load_stack_v1", "stack_v1_cobol"), ("load_xcobol", "xcobol"), ("load_codenet", "codenet_cobol")):
+    loaders = (("load_stack_v1", "stack_v1_cobol"), ("load_xcobol", "xcobol"), ("load_codenet", "codenet_cobol"))
+    for name, src in loaders:
         monkeypatch.setattr(collect, name, one(src))
     monkeypatch.setattr(sys, "argv", ["collect", "--no-wandb", "--xcobol-root", str(tmp_path / "xcobol"), *args])
     collect.main()

@@ -1,5 +1,6 @@
 """
-onprem_codegen/serve/check.py — A3 rehearsal: `base` and the LoRA adapter `cobol` are both listed by vLLM and answer one request.
+onprem_codegen/serve/check.py — A3 rehearsal: `base` and the LoRA adapter `cobol` are both listed by vLLM
+and answer one request.
 
     python -m onprem_codegen.serve.check [--base-url http://localhost:8000/v1]     # through the SSH tunnel
 
@@ -19,7 +20,8 @@ from onprem_codegen.eval.generate import VllmClient
 SCORED = ("       IDENTIFICATION DIVISION.\n       PROGRAM-ID. FACTORIAL.\n       DATA DIVISION.\n"
           "       WORKING-STORAGE SECTION.\n       01 N PIC 9(9).\n       PROCEDURE DIVISION.\n"
           "           ACCEPT N FROM STDIN\n           DISPLAY N\n           STOP RUN.")
-PROMPT = "Write a complete GnuCOBOL program in fixed format that displays HELLO. Answer with a single ```cobol code block."
+PROMPT = ("Write a complete GnuCOBOL program in fixed format that displays HELLO. "
+          "Answer with a single ```cobol code block.")
 
 
 def check(base_url: str, models=("base", "cobol")) -> dict[str, str | None]:
@@ -66,7 +68,8 @@ def main() -> None:
     failed = any(res.values())
     if not failed:
         effect = adapter_effect(base_url)
-        print(f"adapter effect (max logprob diff) {effect:.4f}", "ok" if effect > 1e-3 else "FAIL: adapter is not applied")
+        print(f"adapter effect (max logprob diff) {effect:.4f}",
+              "ok" if effect > 1e-3 else "FAIL: adapter is not applied")
         failed = effect <= 1e-3
     raise SystemExit(failed)
 

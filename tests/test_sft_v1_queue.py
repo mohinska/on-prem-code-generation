@@ -7,7 +7,8 @@ import pytest
 
 ROOT = Path(__file__).resolve().parent.parent
 SCRIPT = ROOT / "scripts" / "sft_v1_queue.sh"
-SECRETS = {"WANDB_API_KEY": "dummy-wandb-secret", "HF_TOKEN": "dummy-hf-secret", "CONTAINER_API_KEY": "dummy-vast-secret"}
+SECRETS = {"WANDB_API_KEY": "dummy-wandb-secret", "HF_TOKEN": "dummy-hf-secret",
+           "CONTAINER_API_KEY": "dummy-vast-secret"}
 
 
 def _run(tmp_path, **env):
@@ -84,7 +85,8 @@ def test_adapter_role_autodestroy_verifies_all_artifacts_first(tmp_path):
     assert _steps(r.stdout)[-2:] == ["verify-wandb", "destroy"]
     verify = next(c for c in _cmds(r.stdout) if "verify" in c)
     for ref in ("sft-v1-adapter:candidate", "sft-v1-seed2-adapter:candidate", "eval-generations:sft-v1",
-                "eval-generations:sft-v1-seed2", "eval-generations:heldout-sft-v1", "eval-generations:heldout-sft-v1-seed2"):
+                "eval-generations:sft-v1-seed2", "eval-generations:heldout-sft-v1",
+                "eval-generations:heldout-sft-v1-seed2"):
         assert ref in verify
     _no_secrets(r)
 

@@ -2,10 +2,14 @@
 PY ?= python
 export PYTHONPATH := src
 
-.PHONY: test codenet data sft-data decontam train train-smoke benchmarks eval eval-generate eval-execute
+.PHONY: test lint codenet data sft-data decontam train train-smoke benchmarks eval eval-generate eval-execute
 
 test:
 	$(PY) -m pytest -q
+
+# line length 120, import order, unused imports/variables (ruff.toml)
+lint:
+	$(PY) -m ruff check src tests scripts
 
 # CodeNet parts -> data/raw/codenet_cobol/, task-pool artifact
 codenet:

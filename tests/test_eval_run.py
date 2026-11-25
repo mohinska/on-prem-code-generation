@@ -65,7 +65,8 @@ def test_thinking_without_opening_tag():
 
 
 def test_thinking_truncated_has_no_answer():
-    assert g.split_reasoning("still thinking ```python\nX\n```", None, thinking=True) == ("", "still thinking ```python\nX\n```")
+    reply = "still thinking ```python\nX\n```"
+    assert g.split_reasoning(reply, None, thinking=True) == ("", reply)
 
 
 def test_old_generations_are_resplit_at_execution():

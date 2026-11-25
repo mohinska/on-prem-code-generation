@@ -41,7 +41,8 @@ def test_build_sft_keeps_only_passing_distinct_capped():
 
 def test_build_sft_drops_few_tests_and_too_hard():
     samples = [_sample(0, n_tests=1), _sample(1, task_text="Score : 600 points\n\nHard"),
-               _sample(2, program=PROG + "*", task_text="Score : 500 points\n\nFine"), _sample(3, program=PROG + "**", task_text="No score")]
+               _sample(2, program=PROG + "*", task_text="Score : 500 points\n\nFine"),
+               _sample(3, program=PROG + "**", task_text="No score")]
     rows, dropped = rs.build_sft(samples, [], CFG)
     assert len(rows) == 2 and dropped == {"few_tests": 1, "too_hard": 1}
 
@@ -54,7 +55,8 @@ def test_all_tests_adds_the_other_statement_samples():
 
 
 def test_all_tests_aoj_headers():
-    prompt = "Sample Input 1\n\n1\n\nOutput for the Sample Input 1\n\n2\n\nSample Input 2\n\n3\n\nOutput for the Sample Input 2\n\n4"
+    prompt = ("Sample Input 1\n\n1\n\nOutput for the Sample Input 1\n\n2\n\n"
+              "Sample Input 2\n\n3\n\nOutput for the Sample Input 2\n\n4")
     assert len(rs.all_tests({"prompt": prompt, "tests": [{"input": "1\n", "output": "2\n"}]})) == 2
 
 
@@ -81,7 +83,8 @@ def test_recheck_ok_runs_each_sample_once(monkeypatch):
                {"task_id": "other", "program": "OTHER", "status": "ok"}]
     assert rs.recheck_ok(samples, {"codenet/p1": task}, {**CFG}) == 1
     assert ran == ["OLD"]
-    assert [s["status"] for s in samples] == ["wrong_output", "ok", "compile_error", "ok"] and samples[0]["n_tests"] == 2
+    assert [s["status"] for s in samples] == ["wrong_output", "ok", "compile_error", "ok"]
+    assert samples[0]["n_tests"] == 2
     assert rs.recheck_ok(samples, {"codenet/p1": task}, {**CFG}) == 0
 
 
@@ -99,18 +102,21 @@ def test_passes_ignoring_spacing(monkeypatch):
 
 class FakeClient:
     def generate(self, messages, sampling, thinking):
-        return [{"content": f"```cobol\n{PROG}```", "finish_reason": "stop"}, {"content": "no code", "finish_reason": "stop"}]
+        return [{"content": f"```cobol\n{PROG}```", "finish_reason": "stop"},
+                {"content": "no code", "finish_reason": "stop"}]
 
 
 def test_sample_task_statuses(monkeypatch):
-    monkeypatch.setattr(rs, "run_program", lambda prog, tests, timeout: {"status": "ok", "stderr": "", "duration_s": 0.1})
+    monkeypatch.setattr(rs, "run_program",
+                        lambda prog, tests, timeout: {"status": "ok", "stderr": "", "duration_s": 0.1})
     ok, none = rs.sample_task(TASK, FakeClient(), CFG)
     assert (ok["status"], none["status"], none["program"]) == ("ok", "no_program", None)
     assert ok["prompt"] == build_prompt("Print A+B.") and ok["hardcoded"] is False
 
 
 def test_generation_hints_reach_the_model_but_not_the_saved_prompt(monkeypatch):
-    monkeypatch.setattr(rs, "run_program", lambda prog, tests, timeout: {"status": "ok", "stderr": "", "duration_s": 0.1})
+    monkeypatch.setattr(rs, "run_program",
+                        lambda prog, tests, timeout: {"status": "ok", "stderr": "", "duration_s": 0.1})
     seen = {}
 
     class Client(FakeClient):
@@ -146,7 +152,8 @@ def test_select_todo_and_second_pass():
 
 
 def test_sample_task_start_idx(monkeypatch):
-    monkeypatch.setattr(rs, "run_program", lambda prog, tests, timeout: {"status": "ok", "stderr": "", "duration_s": 0.1})
+    monkeypatch.setattr(rs, "run_program",
+                        lambda prog, tests, timeout: {"status": "ok", "stderr": "", "duration_s": 0.1})
     assert [s["sample_idx"] for s in rs.sample_task(TASK, FakeClient(), CFG, 16)] == [16, 17]
 
 

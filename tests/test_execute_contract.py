@@ -1,4 +1,6 @@
-"""Contract checks for onprem_codegen/eval/execute.py (Python snippets on the local backend: no cobc or docker needed)."""
+"""Contract checks for onprem_codegen/eval/execute.py.
+
+Python snippets on the local backend: no cobc or docker needed."""
 import pytest
 
 from onprem_codegen.eval.execute import ExecResult, Status, execute

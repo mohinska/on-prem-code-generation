@@ -135,7 +135,8 @@ def normalize_cobolcodebench(rows: list[dict], mode: str) -> list[Task]:
         out.append(Task(
             task_id=f"cobolcodebench/{r['program_name']}", benchmark="cobolcodebench", mode=mode, lang="cobol",
             prompt=r[prompt_key], entry_point=r["program_name"],
-            tests=[{"input_files": json.loads(r["inputs"] or "{}"), "expected_outputs": json.loads(r["outputs"] or "{}")}],
+            tests=[{"input_files": json.loads(r["inputs"] or "{}"),
+                    "expected_outputs": json.loads(r["outputs"] or "{}")}],
             canonical_solution=r["canonical_solution"],
         ))
     return out

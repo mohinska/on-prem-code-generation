@@ -1,10 +1,12 @@
 from onprem_codegen.eval.repair_format import repair
 
-PROMPT = ("       IDENTIFICATION DIVISION.\n       PROGRAM-ID. T.\n       DATA DIVISION.\n       WORKING-STORAGE SECTION.\n"
+PROMPT = ("       IDENTIFICATION DIVISION.\n       PROGRAM-ID. T.\n"
+          "       DATA DIVISION.\n       WORKING-STORAGE SECTION.\n"
           "\n\nWrite a complete GnuCOBOL program in fixed format. Complete the program above. Answer with a single "
           "```cobol code block.")
 BODY = "       PROCEDURE DIVISION.\n           GOBACK.\n"
-FULL = "       IDENTIFICATION DIVISION.\n       PROGRAM-ID. T.\n       DATA DIVISION.\n       WORKING-STORAGE SECTION.\n" + BODY
+FULL = ("       IDENTIFICATION DIVISION.\n       PROGRAM-ID. T.\n"
+        "       DATA DIVISION.\n       WORKING-STORAGE SECTION.\n" + BODY)
 
 
 def test_good_program_is_unchanged():

@@ -16,7 +16,8 @@ def init_run(job_type: str, config: dict, name: str | None = None):
     import wandb
     commit = git_commit() or ""
     return wandb.init(
-        project=os.environ.get("WANDB_PROJECT", "onprem-codegen"), job_type=job_type, name=name or f"{job_type}-{commit[:7]}",
+        project=os.environ.get("WANDB_PROJECT", "onprem-codegen"), job_type=job_type,
+        name=name or f"{job_type}-{commit[:7]}",
         config={**config, "git_commit": commit})
 
 

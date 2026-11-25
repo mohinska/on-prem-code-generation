@@ -16,7 +16,8 @@ class QwenLikeTok:
 
 
 class GemmaLikeTok:
-    """Renders like Gemma 4 non-thinking: the generation prompt has an empty thought channel, the model turn does not."""
+    """Renders like Gemma 4 non-thinking: the generation prompt has an empty thought channel,
+    the model turn does not."""
 
     def apply_chat_template(self, messages, tokenize=False, add_generation_prompt=False, enable_thinking=True):
         out = "<bos>" + "".join(f"<|turn>{'model' if m['role'] == 'assistant' else m['role']}\n"

@@ -17,7 +17,8 @@ from safetensors.torch import load_file, save_file
 
 
 def add_language_model_prefix(adapter_dir: str | Path) -> int:
-    """Rename `model.layers.` -> `model.language_model.layers.` in adapter_model.safetensors; returns how many keys changed."""
+    """Rename `model.layers.` -> `model.language_model.layers.` in adapter_model.safetensors.
+    Returns how many keys changed."""
     path = Path(adapter_dir) / "adapter_model.safetensors"
     tensors = load_file(str(path))
     renamed = {k.replace("model.layers.", "model.language_model.layers.", 1) if "language_model" not in k else k: v

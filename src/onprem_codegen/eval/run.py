@@ -146,7 +146,8 @@ def generate(cfg: dict, tasks: dict, out: Path) -> Path:
 def execute_all(cfg: dict, tasks: dict, gen_path: Path, out: Path) -> Path:
     path = out / "results.jsonl"
     done = {_sample(r) for r in read_jsonl(path)}
-    gens = [g for g in read_jsonl(gen_path) if _sample(g) not in done and (g["benchmark"], g["task_mode"], g["task_id"]) in tasks]
+    gens = [g for g in read_jsonl(gen_path)
+            if _sample(g) not in done and (g["benchmark"], g["task_mode"], g["task_id"]) in tasks]
     print(f"execute: {len(done)} samples done, {len(gens)} to go")
 
     # Identical programs for the same task (e.g. greedy runs) are executed once.
@@ -252,7 +253,8 @@ def log_generations(run, gen_path: Path, cfg: dict) -> None:
 
 
 def run_config(cfg: dict) -> dict:
-    pins = {name: {"revision": b["revision"], "files": b["fetch"]["files"]} for name, b in benchmarks.manifest().items()}
+    pins = {name: {"revision": b["revision"], "files": b["fetch"]["files"]}
+            for name, b in benchmarks.manifest().items()}
     return {**cfg, "git_commit": git_commit(), "protocol": protocol(cfg), "benchmark_pins": pins,
             "execute_backend": os.environ.get("EXECUTE_BACKEND", "docker")}
 

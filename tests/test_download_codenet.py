@@ -8,7 +8,8 @@ from onprem_codegen.data.download_codenet import _HashingReader, build_task_pool
 CFG = {"min_tests": 1, "min_chars": 10, "max_chars": 6000, "max_non_ascii_ratio": 0.05, "drop_with_images": True}
 PATTERNS = ["Project_CodeNet/metadata/*.csv", "Project_CodeNet/problem_descriptions/*.html",
             "Project_CodeNet/data/*/COBOL/*", "Project_CodeNet/derived/input_output/data/*/*"]
-META = ("submission_id,problem_id,user_id,date,language,original_language,filename_ext,status,cpu_time,memory,code_size,accuracy\n"
+META = ("submission_id,problem_id,user_id,date,language,original_language,filename_ext,status,"
+        "cpu_time,memory,code_size,accuracy\n"
         "s000000001,{p},u1,0,COBOL,COBOL,cbl,Accepted,0,0,10,\n"
         "s000000002,{p},u1,0,COBOL,COBOL,cbl,Wrong Answer,0,0,10,\n"
         "s000000003,{p},u1,0,C++,C++14,cpp,Accepted,0,0,10,\n")
@@ -16,10 +17,12 @@ FILES = {
     "Project_CodeNet/metadata/p00001.csv": META.format(p="p00001"),
     "Project_CodeNet/metadata/p00002.csv": META.format(p="p00002"),
     "Project_CodeNet/metadata/p00003.csv": META.format(p="p00003"),
-    "Project_CodeNet/metadata/problem_list.csv": "id,name,dataset,time_limit,memory_limit,rating,tags,complexity\np00001,Sum,AIZU,1,1,,,\n",
+    "Project_CodeNet/metadata/problem_list.csv":
+        "id,name,dataset,time_limit,memory_limit,rating,tags,complexity\np00001,Sum,AIZU,1,1,,,\n",
     "Project_CodeNet/problem_descriptions/p00001.html":
         "<h1>Sum</h1><p>Print   A + B.</p><h2>Sample Input</h2><pre>3 5\n</pre><h2>Sample Output</h2><pre>8\n</pre>",
-    "Project_CodeNet/problem_descriptions/p00002.html": "<p>See the figure for the long statement.</p><img src='x.png'>",
+    "Project_CodeNet/problem_descriptions/p00002.html":
+        "<p>See the figure for the long statement.</p><img src='x.png'>",
     "Project_CodeNet/data/p00001/COBOL/s000000001.cbl": "       PROGRAM-ID. A.\n",
     "Project_CodeNet/data/p00001/COBOL/s000000002.cbl": "       PROGRAM-ID. B.\n",
     "Project_CodeNet/data/p00001/C++/s000000003.cpp": "int main(){}",
@@ -66,7 +69,8 @@ def test_task_pool_schema_and_filters(tmp_path):
 
 
 def test_html_keeps_english_only():
-    html = '<span class="lang"><span class="lang-ja"><p>日本語 <b>x</b></p></span><span class="lang-en"><p>English</p></span></span>'
+    html = ('<span class="lang"><span class="lang-ja"><p>日本語 <b>x</b></p></span>'
+            '<span class="lang-en"><p>English</p></span></span>')
     text, has_image = html_to_text(html)
     assert text == "English" and not has_image
 
