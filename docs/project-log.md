@@ -463,5 +463,19 @@ Execution locally in `eval-sandbox` (Docker Desktop, macOS) at commit `c3c4847`:
 - The prompt has two opposite instructions: the benchmark's comment "INSTRUCTIONS: Complete only the WORKING-STORAGE SECTION and PROCEDURE DIVISION" and our `IO_FILES` sentence "Write a complete GnuCOBOL program". The SFT data never shows this case: in `sft-dataset:v6` all 641 answers are whole programs, all 327 completion prompts end with "answer with the whole program" (`IO_COMPLETE`), the program prefix is 3 lines (median, max 11) and ends before `DATA DIVISION`, and no prompt has `FILE SECTION`, `WORKING-STORAGE` or "Complete only"; 24 of 641 answers use `SELECT` / `FD`.
 - Likely (not tested): Gemma tied "whole program" to the `IO_COMPLETE` sentence, so without it the adapter follows the benchmark comment; Qwen generalized to any program in the prompt. A fix belongs to the data: completion rows with the prefix up to `WORKING-STORAGE`, file I/O, and without `IO_COMPLETE` in part of them.
 
+### sft-gemma4 CobolCodeBench header repair (diagnostic, answers edited)
+Not a model result: answers are edited by rule. CobolCodeBench completion rows of `gemma4-baseline` and `sft-gemma4` (greedy + sampled, 1058 each); only the prefix rule of `repair()` in `eval/repair_format.py` (no `PROGRAM-ID` → program start from the prompt in front, the answer's first line not repeated), no indent rule. Rows changed: base 10, sft-gemma4 839. Executed locally in the sandbox at commit `72cd90e` (`eval.run --stage execute --no-wandb`, config = `gemma4-baseline.yaml` with CobolCodeBench completion only, `outputs/eval-prefix/`).
+
+| CobolCodeBench completion | metric | base | base repaired | sft-gemma4 | sft-gemma4 repaired | Δ repaired vs base repaired [95% CI] |
+|---|---|---|---|---|---|---|
+| greedy | pass@1 | 0.087 | 0.087 | 0.007 | 0.051 | −0.036 [−0.116, +0.043] |
+| | compile | 0.486 | 0.486 | 0.138 | 0.529 | |
+| sampled | pass@1 | 0.087 | 0.087 | 0.009 | 0.047 | −0.040 [−0.102, +0.005] |
+| | pass@10 | 0.098 | 0.098 | 0.022 | 0.087 | −0.011 [−0.065, +0.032] |
+| | compile | 0.497 | 0.499 | 0.108 | 0.455 | |
+
+- The missing header explains most of the drop: compile 0.108 → 0.455 (base 0.499), sampled pass@1 0.009 → 0.047. With it, the guard's pass@1 condition would hold (upper CI bound +0.005 ≥ 0), but the adapter is still not above base.
+- What is left is COBOL with files, not format: sampled statuses repaired sft ok 43, wrong output 263, runtime error 102, compile error 490 (base repaired: 80, 245, 104, 461); first compile error `'X' is not defined` 138 (base 140).
+
 ### still missing
 thinking baseline on CobolCodeBench (not run, see above), CodeNet licence (C), reports.
