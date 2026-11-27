@@ -443,7 +443,7 @@ Execution locally in `eval-sandbox` (Docker Desktop, macOS) at commit `c3c4847`:
 | Seed 43: main | yes | 0.250 → 0.379, Δ +0.129 [+0.070, +0.186]; compile 0.388 → 0.757; pass@10 0.644, Δ +0.167 [+0.100, +0.230] |
 | Seed 43: training works | yes | 0.055 → 0.100, Δ +0.045 [+0.026, +0.065] |
 
-- Gemma base is much stronger than Qwen base on COBOLEval (sampled pass@1 0.250 vs 0.021, compile 0.388 vs 0.086) and on held-out (0.055 vs 0.003). After SFT, Gemma is above Qwen sft-v2 on COBOLEval (0.357 / 0.379 vs 0.274 / 0.282) and on held-out seed 42 (0.109 vs 0.075), but the gain over its own base is smaller (+0.107 vs +0.253).
+- Bases: COBOLEval sampled pass@1 Gemma 0.250, Qwen 0.021 (compile 0.388 vs 0.086); held-out 0.055 vs 0.003. After SFT, point values (no paired CI across models): COBOLEval Gemma 0.357 / 0.379, Qwen sft-v2 0.274 / 0.282; held-out Gemma 0.109 / 0.100, Qwen sft-v2 0.075 / 0.093. Gain over the own base: Gemma Δ +0.107, Qwen Δ +0.253.
 - Other groups, seed 42 vs base: CobolCodeBench completion greedy pass@1 0.087 → 0.007 (compile 0.486 → 0.138), sampled pass@10 0.098 → 0.022 (compile 0.497 → 0.108); CobolCodeBench instruct sampled pass@1 0.017 → 0.008, pass@10 0.080 → 0.066 (compile 0.409 → 0.420), greedy 0.000 → 0.000 (compile 0.377 → 0.543); HumanEval-Python greedy 0.978 → 0.974, sampled pass@10 0.991 → 0.991. Held-out greedy pass@1 0.048 → 0.116 (seed 42) and 0.107 (seed 43), sampled pass@5 0.095 → 0.216 and 0.195; compile rate sampled 0.210 → 0.379 / 0.386.
 - COBOLEval compile errors, first error per program (sampled): base 1783, `unexpected *` 444, `unexpected ., expecting Literal or program name` 252, undefined names 186; seed 42 721 and seed 43 703, COBOL usage as in Qwen sft-v2: arithmetic in `PERFORM VARYING ... FROM I + 1` 110 and `... TO` 54, subscripts (`requires one subscript` 69, `out of bounds` 39), unknown functions 46, undefined names 38, `PICTURE` on `COMP-2` 35.
 - `sft-gemma4-adapter:candidate` stays `candidate`: the CobolCodeBench guard is not met.
@@ -459,7 +459,7 @@ Execution locally in `eval-sandbox` (Docker Desktop, macOS) at commit `c3c4847`:
 | Gemma sft-gemma4 | 174 | 735 | 11 |
 
 - Per task (46 tasks × 20 answers): 33 tasks have no whole program, 4 tasks all 20. COBOLEval is not affected: 2913 of 2920 seed-42 answers are whole programs.
-- The 174 whole programs: 99 compile, 8 pass (file I/O, as for Qwen).
+- The 174 whole programs: 99 compile, 8 pass. Likely (not tested): file I/O, as for Qwen.
 - The prompt has two opposite instructions: the benchmark's comment "INSTRUCTIONS: Complete only the WORKING-STORAGE SECTION and PROCEDURE DIVISION" and our `IO_FILES` sentence "Write a complete GnuCOBOL program". The SFT data never shows this case: in `sft-dataset:v6` all 641 answers are whole programs, all 327 completion prompts end with "answer with the whole program" (`IO_COMPLETE`), the program prefix is 3 lines (median, max 11) and ends before `DATA DIVISION`, and no prompt has `FILE SECTION`, `WORKING-STORAGE` or "Complete only"; 24 of 641 answers use `SELECT` / `FD`.
 - Likely (not tested): Gemma tied "whole program" to the `IO_COMPLETE` sentence, so without it the adapter follows the benchmark comment; Qwen generalized to any program in the prompt. A fix belongs to the data: completion rows with the prefix up to `WORKING-STORAGE`, file I/O, and without `IO_COMPLETE` in part of them.
 
@@ -474,8 +474,8 @@ Not a model result: answers are edited by rule. CobolCodeBench completion rows o
 | | pass@10 | 0.098 | 0.098 | 0.022 | 0.087 | −0.011 [−0.065, +0.032] |
 | | compile | 0.497 | 0.499 | 0.108 | 0.455 | |
 
-- The missing header explains most of the drop: compile 0.108 → 0.455 (base 0.499), sampled pass@1 0.009 → 0.047. With it, the guard's pass@1 condition would hold (upper CI bound +0.005 ≥ 0), but the adapter is still not above base.
-- What is left is COBOL with files, not format: sampled statuses repaired sft ok 43, wrong output 263, runtime error 102, compile error 490 (base repaired: 80, 245, 104, 461); first compile error `'X' is not defined` 138 (base 140).
+- With the header: compile 0.108 → 0.455 (base 0.499), sampled pass@1 0.009 → 0.047. The guard's pass@1 condition would hold (upper CI bound +0.005 ≥ 0); the adapter is not above base.
+- Likely (not tested): what is left is COBOL with files, not format: sampled statuses repaired sft ok 43, wrong output 263, runtime error 102, compile error 490 (base repaired: 80, 245, 104, 461); first compile error `'X' is not defined` 138 (base 140).
 
 ### still missing
 thinking baseline on CobolCodeBench (not run, see above), CodeNet licence (C), reports.

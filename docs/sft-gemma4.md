@@ -5,9 +5,9 @@
 Ми дотренували `google/gemma-4-31B-it` (QLoRA), seed 42 і seed 43, на тих самих даних, з тими самими налаштуваннями і протоколом оцінки, що й [sft-v2](sft-v2.md) на Qwen3.8-27B. Мета — перевірити, чи виграш sft-v2 специфічний для Qwen. Критерії ті самі ([sft-v1-preregistration.md](sft-v1-preregistration.md)); база — Gemma без адаптера.
 
 - **Вердикт: успіх.** Обидва seed виконують основний критерій: COBOLEval sampled pass@1 0.357 і 0.379, база 0.250. Held-out задачі теж вищі за базу.
-- **Python:** HumanEval-Python sampled pass@1 падає лише на 0.010 (ліміт 0.02). У Qwen sft-v2 guard Python не пройшов (−0.041).
-- **CobolCodeBench completion:** guard не пройшов (pass@1 0.087 → 0.009). Адаптер у 735 з 920 відповідей пише лише продовження програми від `WORKING-STORAGE SECTION.`, без заголовка, і така відповідь не компілюється окремо (розділ 3).
-- **Gemma база значно сильніша за Qwen базу** (COBOLEval 0.250 проти 0.021), тому приріст від SFT менший (+0.107 проти +0.253), але після SFT Gemma вища за Qwen sft-v2.
+- **Python:** HumanEval-Python sampled pass@1 0.980 → 0.970, Δ −0.010 [−0.025, +0.001] (ліміт 0.02). У Qwen sft-v2 guard Python не пройшов (Δ −0.041).
+- **CobolCodeBench completion:** guard не пройшов (pass@1 0.087 → 0.009). Адаптер у 735 з 920 відповідей пише лише продовження програми від `WORKING-STORAGE SECTION.`, без заголовка, і така відповідь не компілюється окремо (розділ 4).
+- **Бази різні:** COBOLEval sampled pass@1 Gemma 0.250, Qwen 0.021. Приріст від SFT: Gemma Δ +0.107, Qwen Δ +0.253. Після SFT точкові значення Gemma 0.357 / 0.379, Qwen sft-v2 0.274 / 0.282 (парного CI між моделями немає).
 - **Рішення:** `sft-gemma4-adapter` лишається `candidate`, бо не виконано guard CobolCodeBench.
 
 | Benchmark (sampled pass@1) | Qwen base | Qwen sft-v2 seed 42 / 43 | Gemma base | **Gemma sft seed 42** | **Gemma sft seed 43** |
@@ -68,13 +68,26 @@
 
 **Висновки.**
 
-- **COBOLEval:** обидва seed вищі за базу з CI вище 0, різниця між seed 0.022. Compile rate майже подвоївся (0.388 → 0.75).
+- **COBOLEval:** обидва seed вищі за базу з CI вище 0, різниця між seed 0.022. Compile rate 0.388 → 0.751 (seed 42) і 0.757 (seed 43).
 - **Що ще не компілюється** (COBOLEval sampled, seed 42, 721 відповідь): помилки використання COBOL, ті самі, що в Qwen sft-v2: арифметика в `PERFORM VARYING … FROM I + 1` (110) і `… TO` (54), індекси (108), невідомі функції (46). У бази переважали помилки формату (`unexpected *` 444).
-- **Held-out задачі:** приріст +0.054 / +0.045, менший, ніж у Qwen (+0.072 / +0.089), але від вищої бази; абсолютно Gemma sft вища.
-- **HumanEval-Python:** майже без втрат (−0.010, CI містить 0). Чому Gemma втрачає менше за Qwen, не перевіряли.
+- **Held-out задачі:** Gemma Δ +0.054 / +0.045 від бази 0.055, Qwen sft-v2 Δ +0.072 / +0.089 від бази 0.003. Точкові значення: Gemma sft 0.109 / 0.100, Qwen sft-v2 0.075 / 0.093.
+- **HumanEval-Python:** 0.980 → 0.970, Δ −0.010 [−0.025, +0.001], CI містить 0. Чому в Gemma Δ менший, ніж у Qwen (−0.041), не перевіряли.
 - **CobolCodeBench instruct:** compile rate виріс з 0.377 до 0.543, pass@1 майже 0 і в бази, і в адаптера. Цей бенчмарк не входить у критерії.
 
-## 3. CobolCodeBench completion: відповіді без заголовка програми
+## 3. Критерії й вердикт
+
+| Критерій | Qwen sft-v2 | **Gemma sft** |
+|---|---|---|
+| Основний: COBOLEval sampled pass@1 вищий за базу (нижня межа CI > 0), compile rate вищий | так, обидва seed | **так**, обидва seed |
+| Додатковий: COBOLEval pass@10 вищий (нижня межа CI > 0), greedy pass@1 не нижчий | так | **так** |
+| Guard Python: HumanEval-Python sampled pass@1 падає не більше ніж на 0.02 | ні (−0.041) | **так** (−0.010) |
+| Guard CobolCodeBench: completion pass@1 не гірший (верхня межа CI ≥ 0), truncated +10 пунктів максимум | так | ні (−0.078 [−0.157, −0.021]) |
+| Held-out задачі: pass@1 вищий за базу (нижня межа CI > 0) | так, обидва seed | **так**, обидва seed |
+| **Вердикт** | успіх без guard Python | **успіх** (guard CobolCodeBench не виконано) |
+
+За преєстрацією «успіх» = основний критерій + guard Python + held-out задачі; guard CobolCodeBench у правило вердикту не входить.
+
+## 4. CobolCodeBench completion: відповіді без заголовка програми
 
 727 з 810 помилок компіляції (seed 42, sampled) — `PROGRAM-ID header missing`.
 
@@ -88,8 +101,8 @@
 - SFT на Qwen зсунуло відповіді до повної програми, а на Gemma — у протилежний бік. 33 з 46 задач Gemma sft у жодній з 20 спроб не пише повну програму. COBOLEval це не зачіпає: 2913 з 2920 відповідей — повні програми.
 - У промпті CobolCodeBench дві протилежні вказівки: коментар бенчмарку «Complete only the WORKING-STORAGE SECTION and PROCEDURE DIVISION» і наше речення «Write a complete GnuCOBOL program».
 - У навчальних даних такого випадку немає. Усі 641 відповіді — повні програми; усі 327 completion-промптів закінчуються фразою «answer with the whole program»; початок програми в промпті — 3 рядки (медіана), до `DATA DIVISION`; жодного `FILE SECTION`, `WORKING-STORAGE` чи «Complete only» у промптах; file I/O лише в 24 відповідях.
-- Ймовірне пояснення (не перевірене): Gemma пов'язала «повну програму» з фразою «answer with the whole program», а без неї виконує коментар бенчмарку. Qwen узагальнив ширше.
-- Навіть повні програми Gemma sft тут рідко правильні: зі 174 компілюються 99, проходять тести 8. Причина та сама, що в Qwen: майже немає file I/O у даних.
+- Ймовірно (не перевірено): Gemma пов'язала «повну програму» з фразою «answer with the whole program», а без неї виконує коментар бенчмарку. Qwen узагальнив ширше.
+- Повні програми Gemma sft: зі 174 компілюються 99, проходять тести 8. Ймовірно (не перевірено): причина та сама, що в Qwen, бо file I/O є лише в 24 з 641 навчальної відповіді.
 
 **Діагностика: що, якщо додати заголовок.** Це не результат моделі, бо відповіді відредаговано за правилом. Тим відповідям, де немає `PROGRAM-ID`, підставили початок програми з промпту (`repair()` з `eval/repair_format.py`, лише це правило) і виконали їх знову ([project-log](project-log.md#sft-gemma4-cobolcodebench-header-repair-diagnostic-answers-edited)).
 
@@ -99,25 +112,12 @@
 | pass@10 | 0.098 | 0.022 | 0.087 |
 | compile rate | 0.497 | 0.108 | 0.455 |
 
-Відсутній заголовок пояснює більшу частину падіння. З ним адаптер уже не значуще гірший за базу (Δ pass@1 −0.040 [−0.102, +0.005]), але й не кращий. Решта — робота з файлами.
-
-## 4. Критерії й вердикт
-
-| Критерій | Qwen sft-v2 | **Gemma sft** |
-|---|---|---|
-| Основний: COBOLEval sampled pass@1 вищий за базу (нижня межа CI > 0), compile rate вищий | так, обидва seed | **так**, обидва seed |
-| Додатковий: COBOLEval pass@10 вищий (нижня межа CI > 0), greedy pass@1 не нижчий | так | **так** |
-| Guard Python: HumanEval-Python sampled pass@1 падає не більше ніж на 0.02 | ні (−0.041) | **так** (−0.010) |
-| Guard CobolCodeBench: completion pass@1 не гірший (верхня межа CI ≥ 0), truncated +10 пунктів максимум | так | ні (−0.078 [−0.157, −0.021]) |
-| Held-out задачі: pass@1 вищий за базу (нижня межа CI > 0) | так, обидва seed | **так**, обидва seed |
-| **Вердикт** | успіх без guard Python | **успіх** (guard CobolCodeBench не виконано) |
-
-За преєстрацією «успіх» = основний критерій + guard Python + held-out задачі; guard CobolCodeBench у правило вердикту не входить.
+З заголовком compile rate 0.108 → 0.455 (база 0.497), pass@1 0.009 → 0.047. Різниця з базою Δ pass@1 −0.040 [−0.102, +0.005]: CI містить 0, вищим за базу адаптер не став. Ймовірно (не перевірено): решта різниці — робота з файлами.
 
 ## 5. Наступні кроки
 
 1. **Дані completion.** Додати completion-рядки з початком програми до `WORKING-STORAGE`, з file I/O, і частину без фрази «answer with the whole program». Перевірити на обох моделях.
-2. **Python на Qwen.** Gemma майже не втрачає Python на тих самих даних; варто порівняти з Qwen після replay Python або sweep lr × LoRA rank.
+2. **Python на Qwen.** На тих самих даних Python Δ −0.010 у Gemma і −0.041 у Qwen; порівняти з Qwen після replay Python або sweep lr × LoRA rank.
 3. **DPO** на парах «пройшла / не пройшла» для помилок використання COBOL (розділ 2), для моделі, яку оберемо далі.
 
 ## 6. Обмеження
